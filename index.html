@@ -89,10 +89,21 @@
     font-weight: 800;
     font-variant-numeric: tabular-nums;
   }
+  /* 숫자마다 이름을 붙여둔다. 뭘 곱하는 중인지 설명 없이 알 수 있게 */
+  .term { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .term-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #565c6e;
+    letter-spacing: .08em;
+  }
   .chips { color: #5bc8ff; }
-  .times { color: #565c6e; font-size: 20px; }
+  .times { color: #565c6e; font-size: 20px; margin-bottom: 13px; }
   .mult  { color: #ff5b7b; }
-  .combo { color: #7bff9b; }
+  .combo { color: #7bff9b; transition: color .2s ease; }
+  /* 연쇄가 1일 때는 꺼져 있다가, 쌓이는 순간 켜진다 */
+  .combo.idle { color: #444a5a; }
+  .combo.bump { animation: pop .35s ease; }
 
   .result {
     font-size: 34px;
@@ -213,11 +224,11 @@
     <div class="hand-name" id="hand-name">카드를 골라봐 (최대 5장)</div>
     <div class="chain" id="chain"></div>
     <div class="formula">
-      <span class="chips" id="chips">0</span>
+      <div class="term"><span class="chips" id="chips">0</span><span class="term-label">칩</span></div>
       <span class="times">×</span>
-      <span class="mult" id="mult">0</span>
+      <div class="term"><span class="mult" id="mult">0</span><span class="term-label">배수</span></div>
       <span class="times">×</span>
-      <span class="combo" id="combo">1</span>
+      <div class="term"><span class="combo idle" id="combo">1</span><span class="term-label">연쇄</span></div>
     </div>
     <div class="result" id="result"></div>
   </div>
@@ -531,13 +542,15 @@ function render() {
       $('hand-name').classList.add('active');
       $('chips').textContent = preview.chips;
       $('mult').textContent  = preview.mult;
-      $('combo').textContent = comboFor(preview.chips);
+      setCombo(comboFor(preview.chips), false);
     } else {
       $('hand-name').textContent = '카드를 골라봐 (최대 5장)';
       $('hand-name').classList.remove('active');
       $('chips').textContent = '0';
       $('mult').textContent  = '0';
-      $('combo').textContent = '1';
+      // 아무것도 안 골랐을 때는 "지금 살아있는 연쇄"를 보여준다.
+      // 1로 되돌리면 방금 쌓은 게 사라진 것처럼 보인다.
+      setCombo(Math.max(state.combo, 1), false);
     }
     renderChain(preview);
     $('result').textContent = '';
@@ -547,15 +560,30 @@ function render() {
   $('btn-discard').disabled = state.locked || state.selected.size === 0 || state.discardsLeft <= 0;
 }
 
+// 연쇄 숫자는 1일 때 꺼져 있다가 쌓이는 순간 켜지면서 튄다.
+// 이 "켜지는 순간"이 설명 없이 메커닉을 알려주는 지점이다.
+function setCombo(value, bump) {
+  const el = $('combo');
+  el.textContent = value;
+  el.classList.toggle('idle', value <= 1);
+  el.classList.remove('bump');
+  if (bump && value > 1) {
+    void el.offsetWidth;          // 애니메이션 재시작
+    el.classList.add('bump');
+  }
+}
+
 // 지금 이 족보를 내면 연쇄가 어떻게 되는지 한 줄로 알려준다.
 // 이게 없으면 "이어갈까 갈아탈까"를 판단할 근거가 없다.
 function renderChain(preview) {
   const el = $('chain');
   el.className = 'chain';
 
-  // 아직 한 번도 안 낸 상태
+  // 아직 한 번도 안 낸 상태 — 여기서 규칙을 미리 알려준다
   if (!state.lastName) {
-    el.textContent = preview ? '연쇄 시작' : '';
+    el.textContent = preview
+      ? '이 핸드의 칩이 다음 연쇄의 기준이 돼'
+      : '칩을 계속 높여서 내면 연쇄가 쌓인다';
     return;
   }
 
@@ -583,7 +611,7 @@ function showScorePop(result) {
   $('hand-name').classList.add('active');
   $('chips').textContent = result.chips;
   $('mult').textContent  = result.mult;
-  $('combo').textContent = result.combo;
+  setCombo(result.combo, true);
   renderChain(null);
 
   const el = $('result');
