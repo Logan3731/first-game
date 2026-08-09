@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>카드 로그라이트 — 프로토타입</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #14161c;
+    color: #e8eaf0;
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+
+  #app { width: 100%; max-width: 720px; }
+
+  /* ── 상단 정보 ─────────────────────────── */
+  .hud {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .hud-cell {
+    background: #1e2129;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .hud-label { font-size: 11px; color: #8b91a3; margin-bottom: 4px; }
+  .hud-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hud-value.target { color: #ff8a5b; }
+  .hud-value.score  { color: #5bc8ff; }
+
+  /* 진행 바 */
+  .progress {
+    height: 6px;
+    background: #1e2129;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #5bc8ff, #7b5bff);
+    transition: width .4s ease;
+  }
+
+  /* ── 점수 계산 표시 ────────────────────── */
+  .stage-area {
+    background: #1a1d24;
+    border-radius: 14px;
+    padding: 24px 16px;
+    margin-bottom: 24px;
+    text-align: center;
+    min-height: 148px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+  }
+  .hand-name { font-size: 15px; color: #8b91a3; letter-spacing: .02em; }
+  .hand-name.active { color: #e8eaf0; }
+
+  /* 연쇄 상태 안내 */
+  .chain { font-size: 13px; color: #565c6e; min-height: 16px; }
+  .chain.keep  { color: #7bff9b; }
+  .chain.break { color: #ff5b7b; }
+
+  .formula {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 30px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .chips { color: #5bc8ff; }
+  .times { color: #565c6e; font-size: 20px; }
+  .mult  { color: #ff5b7b; }
+  .combo { color: #7bff9b; }
+
+  .result {
+    font-size: 34px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: #ffd75b;
+    min-height: 41px;
+  }
+  .result.pop { animation: pop .35s ease; }
+  @keyframes pop {
+    0%   { transform: scale(.7); opacity: 0; }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ── 손패 ──────────────────────────────── */
+  .hand {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    min-height: 116px;
+  }
+  .card {
+    width: 68px;
+    height: 96px;
+    background: #f4f5f8;
+    border-radius: 8px;
+    color: #14161c;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    user-select: none;
+    transition: transform .15s ease, box-shadow .15s ease;
+    border: 2px solid transparent;
+  }
+  .card:hover { transform: translateY(-6px); }
+  .card.selected {
+    transform: translateY(-16px);
+    border-color: #ffd75b;
+    box-shadow: 0 6px 20px rgba(255,215,91,.25);
+  }
+  .card.red { color: #d8354a; }
+  .card-rank { font-size: 24px; font-weight: 800; line-height: 1; }
+  .card-suit { font-size: 20px; line-height: 1; }
+
+  /* ── 버튼 ──────────────────────────────── */
+  .actions { display: flex; gap: 10px; justify-content: center; }
+  button {
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 13px 26px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    color: #fff;
+    transition: opacity .15s ease;
+  }
+  button:disabled { opacity: .3; cursor: default; }
+  button:not(:disabled):hover { opacity: .85; }
+  .btn-play    { background: #2f6bff; }
+  .btn-discard { background: #3a3f4d; }
+
+  /* ── 오버레이 (스테이지 클리어 / 게임오버) ── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,11,15,.88);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    text-align: center;
+    padding: 24px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h2 { font-size: 30px; }
+  .overlay p { color: #8b91a3; font-size: 15px; line-height: 1.6; }
+  .overlay .big {
+    font-size: 44px;
+    font-weight: 800;
+    color: #ffd75b;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="hud">
+    <div class="hud-cell">
+      <div class="hud-label">스테이지</div>
+      <div class="hud-value" id="hud-stage">1</div>
+    </div>
+    <div class="hud-cell">
+      <div class="hud-label">목표</div>
+      <div class="hud-value target" id="hud-target">300</div>
+    </div>
+    <div class="hud-cell">
+      <div class="hud-label">현재 점수</div>
+      <div class="hud-value score" id="hud-score">0</div>
+    </div>
+    <div class="hud-cell">
+      <div class="hud-label">핸드 / 버리기</div>
+      <div class="hud-value" id="hud-left">4 / 3</div>
+    </div>
+  </div>
+
+  <div class="progress"><div class="progress-fill" id="progress"></div></div>
+
+  <div class="stage-area">
+    <div class="hand-name" id="hand-name">카드를 골라봐 (최대 5장)</div>
+    <div class="chain" id="chain"></div>
+    <div class="formula">
+      <span class="chips" id="chips">0</span>
+      <span class="times">×</span>
+      <span class="mult" id="mult">0</span>
+      <span class="times">×</span>
+      <span class="combo" id="combo">1</span>
+    </div>
+    <div class="result" id="result"></div>
+  </div>
+
+  <div class="hand" id="hand"></div>
+
+  <div class="actions">
+    <button class="btn-play" id="btn-play" disabled>플레이</button>
+    <button class="btn-discard" id="btn-discard" disabled>버리기</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay">
+  <h2 id="ov-title"></h2>
+  <div class="big" id="ov-score"></div>
+  <p id="ov-desc"></p>
+  <button class="btn-play" id="ov-btn"></button>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  설정값 — 밸런싱은 전부 여기서 만진다
+// ══════════════════════════════════════════════
+
+const HANDS_PER_STAGE    = 4;   // 스테이지당 플레이 횟수
+const DISCARDS_PER_STAGE = 3;   // 스테이지당 버리기 횟수
+const HAND_SIZE          = 8;   // 손에 드는 카드 수
+const COMBO_CAP          = 10;  // 연쇄 배수 상한
+
+// 스테이지 n의 목표 점수. 1.6배씩 늘어난다.
+const targetFor = n => Math.floor(300 * Math.pow(1.6, n - 1) / 10) * 10;
+
+// 족보별 [기본칩, 배수]
+const HAND_TYPES = {
+  straightFlush: { name: '스트레이트 플러시', chips: 100, mult: 8 },
+  fourKind:      { name: '포카드',            chips:  60, mult: 7 },
+  fullHouse:     { name: '풀하우스',          chips:  40, mult: 4 },
+  flush:         { name: '플러시',            chips:  35, mult: 4 },
+  straight:      { name: '스트레이트',        chips:  30, mult: 4 },
+  threeKind:     { name: '트리플',            chips:  30, mult: 3 },
+  twoPair:       { name: '투페어',            chips:  20, mult: 2 },
+  pair:          { name: '원페어',            chips:  10, mult: 2 },
+  highCard:      { name: '하이카드',          chips:   5, mult: 1 },
+};
+
+const SUITS = ['♠', '♥', '♦', '♣'];
+const RANK_NAMES = ['', 'A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+// 카드 한 장이 주는 칩. A는 11, 그림카드는 10.
+const chipsOf = rank => rank === 1 ? 11 : Math.min(rank, 10);
+
+
+// ══════════════════════════════════════════════
+//  게임 상태
+// ══════════════════════════════════════════════
+
+let state;
+
+function newGame() {
+  state = {
+    stage: 1,
+    totalScore: 0,   // 지금까지 누적 (= 최종 기록)
+    deck: [],
+    hand: [],
+    selected: new Set(),
+    stageScore: 0,
+    handsLeft: HANDS_PER_STAGE,
+    discardsLeft: DISCARDS_PER_STAGE,
+    locked: false,      // 점수 연출 중에는 입력을 막는다
+    lastChips: 0,       // 직전 핸드의 칩. 이걸 넘겨야 연쇄가 이어진다
+    lastName: null,     // 직전에 낸 족보 이름 (표시용)
+    combo: 0,           // 연쇄 단계 (스테이지를 넘어가도 유지)
+  };
+  startStage();
+}
+
+function startStage() {
+  state.deck = shuffle(makeDeck());
+  state.hand = [];
+  state.selected.clear();
+  state.stageScore = 0;
+  state.handsLeft = HANDS_PER_STAGE;
+  state.discardsLeft = DISCARDS_PER_STAGE;
+  drawUp();
+  render();
+}
+
+function makeDeck() {
+  const deck = [];
+  for (let suit = 0; suit < 4; suit++) {
+    for (let rank = 1; rank <= 13; rank++) deck.push({ rank, suit });
+  }
+  return deck;
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// 손패를 HAND_SIZE까지 채운다
+function drawUp() {
+  while (state.hand.length < HAND_SIZE && state.deck.length > 0) {
+    state.hand.push(state.deck.pop());
+  }
+}
+
+
+// ══════════════════════════════════════════════
+//  족보 판정
+//  선택한 카드 중 "실제로 점수에 들어가는 카드"까지 같이 돌려준다.
+//  (예: 원페어면 짝 맞은 2장만 칩을 준다)
+// ══════════════════════════════════════════════
+
+function evaluate(cards) {
+  if (cards.length === 0) return null;
+
+  // 랭크별로 묶기
+  const byRank = new Map();
+  for (const c of cards) {
+    if (!byRank.has(c.rank)) byRank.set(c.rank, []);
+    byRank.get(c.rank).push(c);
+  }
+  // 많이 겹친 순 → 랭크 높은 순
+  const groups = [...byRank.values()].sort((a, b) => b.length - a.length || b[0].rank - a[0].rank);
+  const sizes = groups.map(g => g.length);
+
+  const isFive  = cards.length === 5;
+  const isFlush = isFive && cards.every(c => c.suit === cards[0].suit);
+
+  let isStraight = false;
+  if (isFive && sizes[0] === 1) {
+    const r = cards.map(c => c.rank).sort((a, b) => a - b);
+    // 일반 스트레이트
+    if (r[4] - r[0] === 4) isStraight = true;
+    // 10-J-Q-K-A (A를 1로 저장했기 때문에 따로 처리)
+    if (r[0] === 1 && r[1] === 10 && r[4] === 13) isStraight = true;
+  }
+
+  let type, scoring;
+  if (isStraight && isFlush)  { type = 'straightFlush'; scoring = cards; }
+  else if (sizes[0] === 4)    { type = 'fourKind';      scoring = groups[0]; }
+  else if (sizes[0] === 3 && sizes[1] === 2) { type = 'fullHouse'; scoring = cards; }
+  else if (isFlush)           { type = 'flush';         scoring = cards; }
+  else if (isStraight)        { type = 'straight';      scoring = cards; }
+  else if (sizes[0] === 3)    { type = 'threeKind';     scoring = groups[0]; }
+  else if (sizes[0] === 2 && sizes[1] === 2) { type = 'twoPair'; scoring = [...groups[0], ...groups[1]]; }
+  else if (sizes[0] === 2)    { type = 'pair';          scoring = groups[0]; }
+  else {
+    type = 'highCard';
+    // 가장 높은 카드 한 장만 (A가 제일 높음)
+    const best = cards.reduce((a, b) => (b.rank === 1 ? 14 : b.rank) > (a.rank === 1 ? 14 : a.rank) ? b : a);
+    scoring = [best];
+  }
+
+  const def   = HAND_TYPES[type];
+  const chips = def.chips + scoring.reduce((sum, c) => sum + chipsOf(c.rank), 0);
+
+  return { type, name: def.name, chips, mult: def.mult, score: chips * def.mult };
+}
+
+
+// 이 핸드를 지금 내면 연쇄가 몇 배가 되는가.
+// 직전 핸드보다 칩이 높아야 이어진다. 족보 종류는 상관없다.
+// → 같은 족보를 반복하는 것만으로는 오래 못 가고,
+//   "낮은 패를 먼저 쓰고 센 패를 아껴두는" 판단이 생긴다.
+function comboFor(chips) {
+  return chips > state.lastChips ? Math.min(state.combo + 1, COMBO_CAP) : 1;
+}
+
+
+// ══════════════════════════════════════════════
+//  플레이어 액션
+// ══════════════════════════════════════════════
+
+function toggleCard(index) {
+  if (state.locked) return;
+  if (state.selected.has(index)) {
+    state.selected.delete(index);
+  } else {
+    if (state.selected.size >= 5) return;   // 최대 5장
+    state.selected.add(index);
+  }
+  render();
+}
+
+function selectedCards() {
+  return [...state.selected].map(i => state.hand[i]);
+}
+
+// 선택한 카드를 손에서 빼고 다시 채운다
+function removeSelected() {
+  const keep = state.hand.filter((_, i) => !state.selected.has(i));
+  state.hand = keep;
+  state.selected.clear();
+  drawUp();
+}
+
+function play() {
+  if (state.locked || state.selected.size === 0) return;
+  const result = evaluate(selectedCards());
+
+  // 연쇄 갱신 → 점수에 곱한다
+  state.combo = comboFor(result.chips);
+  state.lastChips = result.chips;
+  state.lastName  = result.name;
+  result.combo = state.combo;
+  result.score = result.chips * result.mult * result.combo;
+
+  state.locked = true;
+  state.handsLeft--;
+  state.stageScore += result.score;
+  state.totalScore += result.score;
+
+  removeSelected();
+  render();
+  showScorePop(result);
+
+  // 연출이 끝난 뒤 승패 판정
+  setTimeout(() => {
+    state.locked = false;
+    if (state.stageScore >= targetFor(state.stage)) {
+      stageClear();
+    } else if (state.handsLeft <= 0) {
+      gameOver();
+    } else {
+      render();
+    }
+  }, 900);
+}
+
+function discard() {
+  if (state.locked || state.selected.size === 0 || state.discardsLeft <= 0) return;
+  state.discardsLeft--;
+  removeSelected();
+  render();
+}
+
+
+// ══════════════════════════════════════════════
+//  화면 그리기
+// ══════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+
+function render() {
+  const target = targetFor(state.stage);
+
+  $('hud-stage').textContent  = state.stage;
+  $('hud-target').textContent = target.toLocaleString();
+  $('hud-score').textContent  = state.stageScore.toLocaleString();
+  $('hud-left').textContent   = `${state.handsLeft} / ${state.discardsLeft}`;
+  $('progress').style.width   = Math.min(100, state.stageScore / target * 100) + '%';
+
+  // 손패
+  const handEl = $('hand');
+  handEl.innerHTML = '';
+  state.hand.forEach((card, i) => {
+    const el = document.createElement('div');
+    el.className = 'card'
+      + (state.selected.has(i) ? ' selected' : '')
+      + (card.suit === 1 || card.suit === 2 ? ' red' : '');
+    el.innerHTML = `<div class="card-rank">${RANK_NAMES[card.rank]}</div>`
+                 + `<div class="card-suit">${SUITS[card.suit]}</div>`;
+    el.onclick = () => toggleCard(i);
+    handEl.appendChild(el);
+  });
+
+  // 선택한 조합 미리보기 (연출 중에는 건드리지 않는다)
+  if (!state.locked) {
+    const preview = state.selected.size > 0 ? evaluate(selectedCards()) : null;
+    if (preview) {
+      $('hand-name').textContent = preview.name;
+      $('hand-name').classList.add('active');
+      $('chips').textContent = preview.chips;
+      $('mult').textContent  = preview.mult;
+      $('combo').textContent = comboFor(preview.chips);
+    } else {
+      $('hand-name').textContent = '카드를 골라봐 (최대 5장)';
+      $('hand-name').classList.remove('active');
+      $('chips').textContent = '0';
+      $('mult').textContent  = '0';
+      $('combo').textContent = '1';
+    }
+    renderChain(preview);
+    $('result').textContent = '';
+  }
+
+  $('btn-play').disabled    = state.locked || state.selected.size === 0;
+  $('btn-discard').disabled = state.locked || state.selected.size === 0 || state.discardsLeft <= 0;
+}
+
+// 지금 이 족보를 내면 연쇄가 어떻게 되는지 한 줄로 알려준다.
+// 이게 없으면 "이어갈까 갈아탈까"를 판단할 근거가 없다.
+function renderChain(preview) {
+  const el = $('chain');
+  el.className = 'chain';
+
+  // 아직 한 번도 안 낸 상태
+  if (!state.lastName) {
+    el.textContent = preview ? '연쇄 시작' : '';
+    return;
+  }
+
+  const need = state.lastChips;   // 이 칩을 넘겨야 이어진다
+
+  if (!preview) {
+    el.textContent = `직전 ${state.lastName} ${need}칩 · 연쇄 ×${state.combo} — 다음은 ${need}칩 초과`;
+  } else if (preview.chips > need) {
+    const next = comboFor(preview.chips);
+    el.classList.add('keep');
+    el.textContent = next >= COMBO_CAP
+      ? `연쇄 최대치 ×${COMBO_CAP}`
+      : `${preview.chips}칩 > ${need}칩 · 연쇄 유지 → ×${next}`;
+  } else {
+    el.classList.add('break');
+    el.textContent = state.combo > 1
+      ? `${preview.chips}칩 ≤ ${need}칩 · 연쇄 끊김 (×${state.combo} → ×1)`
+      : `${preview.chips}칩 ≤ ${need}칩 · 연쇄 안 붙음`;
+  }
+}
+
+// 점수가 터지는 연출
+function showScorePop(result) {
+  $('hand-name').textContent = result.name;
+  $('hand-name').classList.add('active');
+  $('chips').textContent = result.chips;
+  $('mult').textContent  = result.mult;
+  $('combo').textContent = result.combo;
+  renderChain(null);
+
+  const el = $('result');
+  el.textContent = '+' + result.score.toLocaleString();
+  el.classList.remove('pop');
+  void el.offsetWidth;      // 애니메이션 재시작 트릭
+  el.classList.add('pop');
+}
+
+
+// ══════════════════════════════════════════════
+//  스테이지 클리어 / 게임 오버
+// ══════════════════════════════════════════════
+
+function bestScore() {
+  return Number(localStorage.getItem('best') || 0);
+}
+
+function stageClear() {
+  showOverlay(
+    `스테이지 ${state.stage} 클리어`,
+    state.stageScore.toLocaleString(),
+    `누적 ${state.totalScore.toLocaleString()}점 · 다음 목표 ${targetFor(state.stage + 1).toLocaleString()}점`,
+    '다음 스테이지',
+    () => { state.stage++; startStage(); }
+  );
+}
+
+function gameOver() {
+  const best = bestScore();
+  const isNewBest = state.totalScore > best;
+  if (isNewBest) localStorage.setItem('best', state.totalScore);
+
+  showOverlay(
+    '게임 오버',
+    state.totalScore.toLocaleString(),
+    isNewBest
+      ? `최고 기록 경신! (이전 ${best.toLocaleString()}점)`
+      : `스테이지 ${state.stage}에서 종료 · 최고 기록 ${best.toLocaleString()}점`,
+    '다시 하기',
+    newGame
+  );
+}
+
+function showOverlay(title, score, desc, btnText, onClick) {
+  $('ov-title').textContent = title;
+  $('ov-score').textContent = score;
+  $('ov-desc').textContent  = desc;
+  $('ov-btn').textContent   = btnText;
+  $('ov-btn').onclick = () => { $('overlay').classList.add('hidden'); onClick(); };
+  $('overlay').classList.remove('hidden');
+}
+
+
+// ══════════════════════════════════════════════
+
+$('btn-play').onclick    = play;
+$('btn-discard').onclick = discard;
+newGame();
+</script>
+
+</body>
+</html>
