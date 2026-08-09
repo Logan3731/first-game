@@ -113,6 +113,17 @@
     min-height: 41px;
   }
   .result.pop { animation: pop .35s ease; }
+  /* 아직 안 낸 상태의 예상치는 확정 점수보다 흐리게 */
+  .result.preview { color: #a8913f; font-size: 27px; }
+
+  /* 이 핸드를 내면 도달할 점수 / 목표 */
+  .projection {
+    font-size: 13px;
+    color: #8b91a3;
+    font-variant-numeric: tabular-nums;
+    min-height: 18px;
+  }
+  .projection.clear { color: #7bff9b; font-weight: 700; }
   @keyframes pop {
     0%   { transform: scale(.7); opacity: 0; }
     60%  { transform: scale(1.15); }
@@ -323,6 +334,7 @@
       <div class="term"><span class="combo idle" id="combo">1</span><span class="term-label">연쇄</span></div>
     </div>
     <div class="result" id="result"></div>
+    <div class="projection" id="projection"></div>
   </div>
 
   <div class="sort-bar">
@@ -801,7 +813,7 @@ function render() {
       setCombo(Math.max(state.combo, 1), false);
     }
     renderChain(preview);
-    $('result').textContent = '';
+    renderProjection(preview);
   }
 
   renderGuide();
@@ -858,6 +870,33 @@ function renderChain(preview) {
   }
 }
 
+// 고른 패를 내면 몇 점이고, 그걸 더하면 스테이지를 넘는지 보여준다.
+// 곱셈 암산은 잡일이지 판단이 아니므로 대신 해준다.
+function renderProjection(preview) {
+  const res = $('result');
+  const prj = $('projection');
+
+  if (!preview) {
+    res.className = 'result';
+    res.textContent = '';
+    prj.className = 'projection';
+    prj.textContent = '';
+    return;
+  }
+
+  const gain   = preview.chips * preview.mult * comboFor(preview.chips);
+  const after  = state.stageScore + gain;
+  const target = targetFor(state.stage);
+  const 클리어 = after >= target;
+
+  res.className = 'result preview';
+  res.textContent = '= ' + gain.toLocaleString();
+
+  prj.className = 'projection' + (클리어 ? ' clear' : '');
+  prj.textContent = `${after.toLocaleString()} / ${target.toLocaleString()}`
+                  + (클리어 ? '  ·  클리어!' : '');
+}
+
 // 점수가 터지는 연출
 function showScorePop(result) {
   $('hand-name').textContent = result.name;
@@ -867,10 +906,13 @@ function showScorePop(result) {
   setCombo(result.combo, true);
   renderChain(null);
 
+  $('projection').className = 'projection';
+  $('projection').textContent = '';
+
   const el = $('result');
+  el.className = 'result';          // 예상치(preview) 스타일을 확실히 걷어낸다
   el.textContent = '+' + result.score.toLocaleString();
-  el.classList.remove('pop');
-  void el.offsetWidth;      // 애니메이션 재시작 트릭
+  void el.offsetWidth;              // 애니메이션 재시작 트릭
   el.classList.add('pop');
 }
 
