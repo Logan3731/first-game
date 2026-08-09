@@ -119,6 +119,18 @@
     100% { transform: scale(1); opacity: 1; }
   }
 
+  /* ── 정렬 버튼 ─────────────────────────── */
+  .sort-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 12px; }
+  .sort-btn {
+    background: #1e2129;
+    color: #6b7183;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 15px;
+    border-radius: 999px;
+  }
+  .sort-btn.active { background: #2f3542; color: #e8eaf0; }
+
   /* ── 손패 ──────────────────────────────── */
   .hand {
     display: flex;
@@ -285,6 +297,11 @@
     <div class="result" id="result"></div>
   </div>
 
+  <div class="sort-bar">
+    <button class="sort-btn" id="sort-rank">숫자순</button>
+    <button class="sort-btn" id="sort-suit">무늬순</button>
+  </div>
+
   <div class="hand" id="hand"></div>
 
   <div class="actions">
@@ -400,6 +417,7 @@ function newGame() {
     combo: 0,           // 연쇄 단계 (스테이지를 넘어가도 유지)
     maxCombo: 0,        // 이 판에서 도달한 최고 연쇄 (분석용)
     startedAt: Date.now(),
+    sortMode: localStorage.getItem('sortMode') || 'rank',   // 정렬 취향은 기억한다
   };
   track('run-start');
   startStage();
@@ -432,11 +450,33 @@ function shuffle(arr) {
   return arr;
 }
 
-// 손패를 HAND_SIZE까지 채운다
+// 손패를 HAND_SIZE까지 채운다. 뽑고 나면 항상 다시 정렬한다.
 function drawUp() {
   while (state.hand.length < HAND_SIZE && state.deck.length > 0) {
     state.hand.push(state.deck.pop());
   }
+  sortHand();
+}
+
+// 정렬 기준값. A는 rank가 1이지만 가장 높은 카드로 다룬다.
+const sortValue = c => (c.rank === 1 ? 14 : c.rank);
+
+function sortHand() {
+  // 인덱스로 들고 있는 선택 상태가 깨지지 않게 카드 자체를 기억해뒀다 복원한다
+  const picked = [...state.selected].map(i => state.hand[i]);
+
+  state.hand.sort(state.sortMode === 'suit'
+    ? (a, b) => a.suit - b.suit || sortValue(b) - sortValue(a)
+    : (a, b) => sortValue(b) - sortValue(a) || a.suit - b.suit);
+
+  state.selected = new Set(picked.map(c => state.hand.indexOf(c)));
+}
+
+function setSort(mode) {
+  state.sortMode = mode;
+  localStorage.setItem('sortMode', mode);
+  sortHand();
+  render();
 }
 
 
@@ -680,6 +720,9 @@ function render() {
 
   renderGuide();
 
+  $('sort-rank').classList.toggle('active', state.sortMode !== 'suit');
+  $('sort-suit').classList.toggle('active', state.sortMode === 'suit');
+
   $('btn-play').disabled    = state.locked || state.selected.size === 0;
   $('btn-discard').disabled = state.locked || state.selected.size === 0 || state.discardsLeft <= 0;
 }
@@ -847,6 +890,8 @@ function showOverlay(title, score, desc, btnText, onClick, share) {
 
 $('btn-play').onclick    = play;
 $('btn-discard').onclick = discard;
+$('sort-rank').onclick   = () => setSort('rank');
+$('sort-suit').onclick   = () => setSort('suit');
 newGame();
 </script>
 
