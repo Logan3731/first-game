@@ -238,7 +238,13 @@
 // ── 분석 ───────────────────────────────────────
 // 이벤트를 GoatCounter로 보낸다. 스크립트가 없으면 조용히 무시된다.
 // (개인정보는 아무것도 안 보낸다. 아래 이름들만 나간다.)
+// 로컬에서 여는 경우(file://, localhost)는 집계하지 않는다.
+// 내 테스트 플레이가 섞이면 지표가 통째로 못 쓰게 된다.
+const ANALYTICS_ON = location.protocol.startsWith('http')
+                  && !['localhost', '127.0.0.1'].includes(location.hostname);
+
 function track(name) {
+  if (!ANALYTICS_ON) return;
   const send = () => {
     if (window.goatcounter && window.goatcounter.count) {
       window.goatcounter.count({ path: name, event: true });
