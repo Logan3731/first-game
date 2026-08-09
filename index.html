@@ -235,6 +235,30 @@
 //  설정값 — 밸런싱은 전부 여기서 만진다
 // ══════════════════════════════════════════════
 
+// ── 분석 ───────────────────────────────────────
+// 이벤트를 GoatCounter로 보낸다. 스크립트가 없으면 조용히 무시된다.
+// (개인정보는 아무것도 안 보낸다. 아래 이름들만 나간다.)
+function track(name) {
+  const send = () => {
+    if (window.goatcounter && window.goatcounter.count) {
+      window.goatcounter.count({ path: name, event: true });
+    }
+  };
+  // 분석 스크립트가 async라 게임보다 늦게 뜰 수 있어 한 번 더 시도한다
+  if (window.goatcounter && window.goatcounter.count) send();
+  else setTimeout(send, 2000);
+}
+
+// 플레이 시간을 구간으로 묶는다 (초 단위 원본은 보내지 않는다)
+function playtimeBucket(sec) {
+  if (sec <  120) return 'playtime-0-2m';
+  if (sec <  300) return 'playtime-2-5m';
+  if (sec <  600) return 'playtime-5-10m';
+  if (sec < 1200) return 'playtime-10-20m';
+  return 'playtime-20m+';
+}
+
+
 const HANDS_PER_STAGE    = 4;   // 스테이지당 플레이 횟수
 const DISCARDS_PER_STAGE = 3;   // 스테이지당 버리기 횟수
 const HAND_SIZE          = 8;   // 손에 드는 카드 수
@@ -283,7 +307,10 @@ function newGame() {
     lastChips: 0,       // 직전 핸드의 칩. 이걸 넘겨야 연쇄가 이어진다
     lastName: null,     // 직전에 낸 족보 이름 (표시용)
     combo: 0,           // 연쇄 단계 (스테이지를 넘어가도 유지)
+    maxCombo: 0,        // 이 판에서 도달한 최고 연쇄 (분석용)
+    startedAt: Date.now(),
   };
+  track('run-start');
   startStage();
 }
 
@@ -418,6 +445,7 @@ function play() {
 
   // 연쇄 갱신 → 점수에 곱한다
   state.combo = comboFor(result.chips);
+  state.maxCombo = Math.max(state.maxCombo, state.combo);
   state.lastChips = result.chips;
   state.lastName  = result.name;
   result.combo = state.combo;
@@ -562,6 +590,7 @@ function bestScore() {
 }
 
 function stageClear() {
+  track('stage-clear-' + state.stage);
   showOverlay(
     `스테이지 ${state.stage} 클리어`,
     state.stageScore.toLocaleString(),
@@ -575,6 +604,10 @@ function gameOver() {
   const best = bestScore();
   const isNewBest = state.totalScore > best;
   if (isNewBest) localStorage.setItem('best', state.totalScore);
+
+  track('gameover-stage-' + state.stage);
+  track('maxcombo-' + state.maxCombo);
+  track(playtimeBucket((Date.now() - state.startedAt) / 1000));
 
   showOverlay(
     '게임 오버',
@@ -603,6 +636,12 @@ $('btn-play').onclick    = play;
 $('btn-discard').onclick = discard;
 newGame();
 </script>
+
+<!-- 분석: GoatCounter. 쿠키를 안 쓰므로 동의 배너가 필요 없다.
+     goatcounter.com 가입 후 받은 코드로 아래 YOUR-CODE 부분만 바꾸면 된다.
+     바꾸기 전까지는 요청이 조용히 실패할 뿐 게임에는 영향이 없다. -->
+<script data-goatcounter="https://YOUR-CODE.goatcounter.com/count"
+        async src="https://gc.zgo.at/count.js"></script>
 
 </body>
 </html>
