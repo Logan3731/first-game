@@ -32,7 +32,14 @@
     padding: 10px 12px;
     text-align: center;
   }
-  .hud-label { font-size: 11px; color: #8b91a3; margin-bottom: 4px; }
+  /* 좁은 화면에서 줄바꿈되면 라벨이 깨져 보인다 */
+  .hud-label { font-size: 11px; color: #8b91a3; margin-bottom: 4px; white-space: nowrap; }
+  @media (max-width: 420px) {
+    .hud { gap: 6px; }
+    .hud-cell { padding: 10px 4px; }
+    .hud-label { font-size: 10px; }
+    .hud-value { font-size: 17px; }
+  }
   .hud-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .hud-value.target { color: #ff8a5b; }
   .hud-value.score  { color: #5bc8ff; }
