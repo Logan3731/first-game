@@ -172,6 +172,40 @@
   .btn-play    { background: #2f6bff; }
   .btn-discard { background: #3a3f4d; }
 
+  /* ── 족보표 ────────────────────────────── */
+  .guide {
+    margin-top: 26px;
+    background: #1a1d24;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .guide summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #8b91a3;
+    user-select: none;
+  }
+  .guide summary::marker { color: #565c6e; }
+  .guide-count { color: #7bff9b; }
+  .guide-list { padding: 0 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .guide-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: #626879;
+  }
+  /* 지금 손패로 만들 수 있는 족보를 켜준다 */
+  .guide-row.can { background: #232833; color: #e8eaf0; }
+  .guide-name { font-weight: 700; }
+  .guide-desc { font-weight: 400; font-size: 12px; color: #565c6e; margin-left: 8px; }
+  .guide-row.can .guide-desc { color: #8b91a3; }
+  .guide-score { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12px; }
+
   /* ── 오버레이 (스테이지 클리어 / 게임오버) ── */
   .overlay {
     position: fixed;
@@ -257,6 +291,11 @@
     <button class="btn-play" id="btn-play" disabled>플레이</button>
     <button class="btn-discard" id="btn-discard" disabled>버리기</button>
   </div>
+
+  <details class="guide" id="guide" open>
+    <summary id="guide-summary">족보표</summary>
+    <div class="guide-list" id="guide-list"></div>
+  </details>
 </div>
 
 <div class="overlay hidden" id="overlay">
@@ -314,17 +353,23 @@ const COMBO_CAP          = 10;  // 연쇄 배수 상한
 const targetFor = n => Math.floor(300 * Math.pow(1.6, n - 1) / 10) * 10;
 
 // 족보별 [기본칩, 배수]
+// desc는 포커를 모르는 사람이 목록만 보고 알 수 있게 적는다.
+// 이 게임의 최대 진입 장벽이 "족보를 모른다"였다.
 const HAND_TYPES = {
-  straightFlush: { name: '스트레이트 플러시', chips: 100, mult: 8 },
-  fourKind:      { name: '포카드',            chips:  60, mult: 7 },
-  fullHouse:     { name: '풀하우스',          chips:  40, mult: 4 },
-  flush:         { name: '플러시',            chips:  35, mult: 4 },
-  straight:      { name: '스트레이트',        chips:  30, mult: 4 },
-  threeKind:     { name: '트리플',            chips:  30, mult: 3 },
-  twoPair:       { name: '투페어',            chips:  20, mult: 2 },
-  pair:          { name: '원페어',            chips:  10, mult: 2 },
-  highCard:      { name: '하이카드',          chips:   5, mult: 1 },
+  straightFlush: { name: '스트레이트 플러시', desc: '같은 무늬로 이어지는 5장', chips: 100, mult: 8 },
+  fourKind:      { name: '포카드',            desc: '같은 숫자 4장',            chips:  60, mult: 7 },
+  fullHouse:     { name: '풀하우스',          desc: '같은 숫자 3장 + 2장',      chips:  40, mult: 4 },
+  flush:         { name: '플러시',            desc: '같은 무늬 5장',            chips:  35, mult: 4 },
+  straight:      { name: '스트레이트',        desc: '숫자가 이어지는 5장',      chips:  30, mult: 4 },
+  threeKind:     { name: '트리플',            desc: '같은 숫자 3장',            chips:  30, mult: 3 },
+  twoPair:       { name: '투페어',            desc: '같은 숫자 2장씩 두 쌍',    chips:  20, mult: 2 },
+  pair:          { name: '원페어',            desc: '같은 숫자 2장',            chips:  10, mult: 2 },
+  highCard:      { name: '하이카드',          desc: '아무것도 안 맞을 때',      chips:   5, mult: 1 },
 };
+
+// 족보표에 보여줄 순서. 쉬운 것부터 올라가는 사다리로 읽히게 한다.
+const GUIDE_ORDER = ['pair', 'twoPair', 'threeKind', 'straight', 'flush',
+                     'fullHouse', 'fourKind', 'straightFlush'];
 
 const SUITS = ['♠', '♥', '♦', '♣'];
 const RANK_NAMES = ['', 'A','2','3','4','5','6','7','8','9','10','J','Q','K'];
@@ -446,6 +491,61 @@ function evaluate(cards) {
   const chips = def.chips + scoring.reduce((sum, c) => sum + chipsOf(c.rank), 0);
 
   return { type, name: def.name, chips, mult: def.mult, score: chips * def.mult };
+}
+
+
+// ══════════════════════════════════════════════
+//  족보표 — 손패로 지금 뭘 만들 수 있는지 켜서 보여준다.
+//  포커를 몰라도 목록만 보고 규칙을 알 수 있어야 한다.
+// ══════════════════════════════════════════════
+
+// 랭크 집합 안에 5장 연속이 있는가 (A는 맨 앞과 맨 뒤 모두 가능)
+function hasStraight(ranks) {
+  for (let start = 1; start <= 9; start++) {
+    let ok = true;
+    for (let k = 0; k < 5; k++) if (!ranks.has(start + k)) { ok = false; break; }
+    if (ok) return true;
+  }
+  return [10, 11, 12, 13, 1].every(r => ranks.has(r));   // 10-J-Q-K-A
+}
+
+function availableTypes() {
+  const rankCount = {}, suitCount = {}, ranksBySuit = {};
+  for (const c of state.hand) {
+    rankCount[c.rank] = (rankCount[c.rank] || 0) + 1;
+    suitCount[c.suit] = (suitCount[c.suit] || 0) + 1;
+    (ranksBySuit[c.suit] = ranksBySuit[c.suit] || new Set()).add(c.rank);
+  }
+  const counts = Object.values(rankCount).sort((a, b) => b - a);
+  const pairs  = counts.filter(n => n >= 2).length;
+  const ranks  = new Set(state.hand.map(c => c.rank));
+
+  const can = new Set();
+  if (counts[0] >= 2)               can.add('pair');
+  if (pairs >= 2)                   can.add('twoPair');
+  if (counts[0] >= 3)               can.add('threeKind');
+  if (counts[0] >= 4)               can.add('fourKind');
+  if (counts[0] >= 3 && pairs >= 2) can.add('fullHouse');
+  if (hasStraight(ranks))           can.add('straight');
+  if (Object.values(suitCount).some(n => n >= 5)) can.add('flush');
+  for (const s in ranksBySuit) if (hasStraight(ranksBySuit[s])) can.add('straightFlush');
+  return can;
+}
+
+function renderGuide() {
+  const can = availableTypes();
+  $('guide-summary').innerHTML = can.size
+    ? `족보표 · 지금 만들 수 있는 것 <span class="guide-count">${can.size}개</span>`
+    : '족보표';
+
+  $('guide-list').innerHTML = GUIDE_ORDER.map(key => {
+    const t = HAND_TYPES[key];
+    return `<div class="guide-row${can.has(key) ? ' can' : ''}">`
+         +   `<span><span class="guide-name">${t.name}</span>`
+         +   `<span class="guide-desc">${t.desc}</span></span>`
+         +   `<span class="guide-score">${t.chips} × ${t.mult}</span>`
+         + '</div>';
+  }).join('');
 }
 
 
@@ -577,6 +677,8 @@ function render() {
     renderChain(preview);
     $('result').textContent = '';
   }
+
+  renderGuide();
 
   $('btn-play').disabled    = state.locked || state.selected.size === 0;
   $('btn-discard').disabled = state.locked || state.selected.size === 0 || state.discardsLeft <= 0;
