@@ -402,6 +402,11 @@ function playtimeBucket(sec) {
 }
 
 
+// 공유 링크에 넣을 정식 주소.
+// itch.io 등에 올리면 게임은 CDN 도메인의 iframe에서 도는데,
+// 그 주소를 그대로 공유하면 눌러도 제대로 안 열린다.
+const SHARE_URL = 'https://logan3731.github.io/first-game/';
+
 const HANDS_PER_STAGE    = 4;   // 스테이지당 플레이 횟수
 const DISCARDS_PER_STAGE = 3;   // 스테이지당 버리기 횟수
 const HAND_SIZE          = 8;   // 손에 드는 카드 수
@@ -992,7 +997,7 @@ function shareText() {
     `스테이지 ${state.stage}에서 종료 · ${state.totalScore.toLocaleString()}점`,
     `최고 연쇄 ×${state.maxCombo}`,
     '🟩'.repeat(cleared) + '🟥',
-    location.origin + location.pathname,
+    SHARE_URL,
   ].join('\n');
 }
 
