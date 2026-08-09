@@ -217,6 +217,34 @@
   .guide-desc { font-weight: 400; font-size: 12px; color: #565c6e; margin-left: 8px; }
   .guide-row.can .guide-desc { color: #8b91a3; }
   .guide-score { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12px; }
+  /* 업그레이드로 올라간 수치는 눈에 띄게 */
+  .guide-score.buffed { color: #ffd75b; font-weight: 700; }
+
+  /* ── 업그레이드 선택 ───────────────────── */
+  .upgrades {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 580px;
+  }
+  .upgrade {
+    flex: 1 1 165px;
+    min-width: 155px;
+    background: #1e2129;
+    border: 1px solid #2f3542;
+    border-radius: 12px;
+    padding: 16px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    text-align: left;
+    font-weight: 400;
+    color: #e8eaf0;
+  }
+  .upgrade:hover { background: #262b36; border-color: #4a5266; opacity: 1; }
+  .upgrade-name { font-size: 15px; font-weight: 700; color: #ffd75b; }
+  .upgrade-desc { font-size: 12px; color: #8b91a3; line-height: 1.5; }
 
   /* ── 오버레이 (스테이지 클리어 / 게임오버) ── */
   .overlay {
@@ -320,6 +348,7 @@
   <div class="big" id="ov-score"></div>
   <p id="ov-desc"></p>
   <pre class="share-preview hidden" id="ov-share"></pre>
+  <div class="upgrades hidden" id="ov-upgrades"></div>
   <div class="ov-actions">
     <button class="btn-play" id="ov-btn"></button>
     <button class="btn-discard hidden" id="ov-share-btn">결과 복사</button>
@@ -368,6 +397,39 @@ const COMBO_CAP          = 10;  // 연쇄 배수 상한
 
 // 스테이지 n의 목표 점수. 1.6배씩 늘어난다.
 const targetFor = n => Math.floor(300 * Math.pow(1.6, n - 1) / 10) * 10;
+
+// ── 업그레이드 ─────────────────────────────────
+// 스테이지를 깰 때마다 3개 중 1개를 고른다.
+// 위 상수들은 "시작값"일 뿐이고 실제 값은 state가 들고 있다.
+function addBonus(s, type, chips, mult) {
+  const b = s.bonus[type] || (s.bonus[type] = { chips: 0, mult: 0 });
+  b.chips += chips;
+  b.mult  += mult;
+}
+
+const UPGRADES = [
+  { id: 'hands',    name: '핸드 +1',    desc: '스테이지마다 한 번 더 낼 수 있다',
+    apply: s => s.handsMax += 1 },
+  { id: 'discards', name: '버리기 +2',  desc: '원하는 패를 더 오래 낚을 수 있다',
+    apply: s => s.discardsMax += 2 },
+  { id: 'handsize', name: '손패 +1장',  desc: '한 번에 보는 카드가 늘어난다',
+    apply: s => s.handSize += 1 },
+  { id: 'combocap', name: '연쇄 상한 +3', desc: '사다리를 더 높이 쌓을 수 있다',
+    apply: s => s.comboCap += 3 },
+
+  { id: 'lowhands', name: '원페어·투페어 배수 +2', desc: '낮은 패로 사다리를 시작하기 좋아진다',
+    apply: s => { addBonus(s, 'pair', 0, 2); addBonus(s, 'twoPair', 0, 2); } },
+  { id: 'flush',    name: '플러시 배수 +3',        desc: '같은 무늬를 모으는 판이 된다',
+    apply: s => addBonus(s, 'flush', 0, 3) },
+  { id: 'straight', name: '스트레이트 배수 +3',    desc: '이어지는 숫자를 노리는 판이 된다',
+    apply: s => addBonus(s, 'straight', 0, 3) },
+  { id: 'trips',    name: '트리플·포카드 배수 +2', desc: '같은 숫자를 모으는 판이 된다',
+    apply: s => { addBonus(s, 'threeKind', 0, 2); addBonus(s, 'fourKind', 0, 2); } },
+
+  // 칩은 올라가지만 사다리의 낮은 칸이 사라진다. 공짜가 아니다.
+  { id: 'strip',    name: '덱에서 2·3·4 제거', desc: '패가 전반적으로 세지지만 연쇄를 낮게 시작할 수 없다',
+    max: 1, apply: s => [2, 3, 4].forEach(r => s.removedRanks.add(r)) },
+];
 
 // 족보별 [기본칩, 배수]
 // desc는 포커를 모르는 사람이 목록만 보고 알 수 있게 적는다.
@@ -418,6 +480,16 @@ function newGame() {
     maxCombo: 0,        // 이 판에서 도달한 최고 연쇄 (분석용)
     startedAt: Date.now(),
     sortMode: localStorage.getItem('sortMode') || 'rank',   // 정렬 취향은 기억한다
+
+    // ── 업그레이드로 바뀌는 값들 ──
+    // 위 상수는 시작값일 뿐. 실제로 참조하는 건 전부 이쪽이다.
+    handsMax:     HANDS_PER_STAGE,
+    discardsMax:  DISCARDS_PER_STAGE,
+    handSize:     HAND_SIZE,
+    comboCap:     COMBO_CAP,
+    bonus:        {},          // 족보별 { chips, mult } 추가치
+    removedRanks: new Set(),   // 덱에서 빼버린 숫자
+    taken:        {},          // 업그레이드 id별 획득 횟수
   };
   track('run-start');
   startStage();
@@ -428,8 +500,8 @@ function startStage() {
   state.hand = [];
   state.selected.clear();
   state.stageScore = 0;
-  state.handsLeft = HANDS_PER_STAGE;
-  state.discardsLeft = DISCARDS_PER_STAGE;
+  state.handsLeft = state.handsMax;
+  state.discardsLeft = state.discardsMax;
   drawUp();
   render();
 }
@@ -437,7 +509,10 @@ function startStage() {
 function makeDeck() {
   const deck = [];
   for (let suit = 0; suit < 4; suit++) {
-    for (let rank = 1; rank <= 13; rank++) deck.push({ rank, suit });
+    for (let rank = 1; rank <= 13; rank++) {
+      if (state.removedRanks.has(rank)) continue;   // 업그레이드로 빼버린 숫자
+      deck.push({ rank, suit });
+    }
   }
   return deck;
 }
@@ -452,7 +527,7 @@ function shuffle(arr) {
 
 // 손패를 HAND_SIZE까지 채운다. 뽑고 나면 항상 다시 정렬한다.
 function drawUp() {
-  while (state.hand.length < HAND_SIZE && state.deck.length > 0) {
+  while (state.hand.length < state.handSize && state.deck.length > 0) {
     state.hand.push(state.deck.pop());
   }
   sortHand();
@@ -485,6 +560,14 @@ function setSort(mode) {
 //  선택한 카드 중 "실제로 점수에 들어가는 카드"까지 같이 돌려준다.
 //  (예: 원페어면 짝 맞은 2장만 칩을 준다)
 // ══════════════════════════════════════════════
+
+// 족보의 실제 칩/배수 = 기본값 + 이번 런에서 얻은 보너스.
+// HAND_TYPES 원본은 절대 건드리지 않는다 (런이 끝나도 남아버린다).
+function statsFor(type) {
+  const def = HAND_TYPES[type];
+  const b   = (state && state.bonus && state.bonus[type]) || { chips: 0, mult: 0 };
+  return { chips: def.chips + b.chips, mult: def.mult + b.mult };
+}
 
 function evaluate(cards) {
   if (cards.length === 0) return null;
@@ -528,9 +611,10 @@ function evaluate(cards) {
   }
 
   const def   = HAND_TYPES[type];
-  const chips = def.chips + scoring.reduce((sum, c) => sum + chipsOf(c.rank), 0);
+  const b     = statsFor(type);
+  const chips = b.chips + scoring.reduce((sum, c) => sum + chipsOf(c.rank), 0);
 
-  return { type, name: def.name, chips, mult: def.mult, score: chips * def.mult };
+  return { type, name: def.name, chips, mult: b.mult, score: chips * b.mult };
 }
 
 
@@ -580,10 +664,12 @@ function renderGuide() {
 
   $('guide-list').innerHTML = GUIDE_ORDER.map(key => {
     const t = HAND_TYPES[key];
+    const s = statsFor(key);                       // 업그레이드가 반영된 실제 수치
+    const up = s.mult > t.mult || s.chips > t.chips;
     return `<div class="guide-row${can.has(key) ? ' can' : ''}">`
          +   `<span><span class="guide-name">${t.name}</span>`
          +   `<span class="guide-desc">${t.desc}</span></span>`
-         +   `<span class="guide-score">${t.chips} × ${t.mult}</span>`
+         +   `<span class="guide-score${up ? ' buffed' : ''}">${s.chips} × ${s.mult}</span>`
          + '</div>';
   }).join('');
 }
@@ -594,7 +680,7 @@ function renderGuide() {
 // → 같은 족보를 반복하는 것만으로는 오래 못 가고,
 //   "낮은 패를 먼저 쓰고 센 패를 아껴두는" 판단이 생긴다.
 function comboFor(chips) {
-  return chips > state.lastChips ? Math.min(state.combo + 1, COMBO_CAP) : 1;
+  return chips > state.lastChips ? Math.min(state.combo + 1, state.comboCap) : 1;
 }
 
 
@@ -761,8 +847,8 @@ function renderChain(preview) {
   } else if (preview.chips > need) {
     const next = comboFor(preview.chips);
     el.classList.add('keep');
-    el.textContent = next >= COMBO_CAP
-      ? `연쇄 최대치 ×${COMBO_CAP}`
+    el.textContent = next >= state.comboCap
+      ? `연쇄 최대치 ×${state.comboCap}`
       : `${preview.chips}칩 > ${need}칩 · 연쇄 유지 → ×${next}`;
   } else {
     el.classList.add('break');
@@ -797,14 +883,41 @@ function bestScore() {
   return Number(localStorage.getItem('best') || 0);
 }
 
+// 아직 최대 획득 횟수에 안 걸린 것들 중에서 n개를 뽑는다
+function pickUpgrades(n) {
+  const pool = UPGRADES.filter(u => (state.taken[u.id] || 0) < (u.max || Infinity));
+  return shuffle([...pool]).slice(0, n);
+}
+
+function renderUpgrades(list) {
+  const box = $('ov-upgrades');
+  box.innerHTML = '';
+
+  for (const u of list) {
+    const el = document.createElement('button');
+    el.className = 'upgrade';
+    el.innerHTML = `<span class="upgrade-name">${u.name}</span>`
+                 + `<span class="upgrade-desc">${u.desc}</span>`;
+    el.onclick = () => {
+      u.apply(state);
+      state.taken[u.id] = (state.taken[u.id] || 0) + 1;
+      track('upgrade-' + u.id);
+      $('overlay').classList.add('hidden');
+      state.stage++;
+      startStage();
+    };
+    box.appendChild(el);
+  }
+}
+
 function stageClear() {
   track('stage-clear-' + state.stage);
   showOverlay(
     `스테이지 ${state.stage} 클리어`,
     state.stageScore.toLocaleString(),
-    `누적 ${state.totalScore.toLocaleString()}점 · 다음 목표 ${targetFor(state.stage + 1).toLocaleString()}점`,
-    '다음 스테이지',
-    () => { state.stage++; startStage(); }
+    `다음 목표 ${targetFor(state.stage + 1).toLocaleString()}점 · 하나 골라`,
+    null, null, false,
+    pickUpgrades(3)
   );
 }
 
@@ -866,12 +979,20 @@ async function copyShare() {
   setTimeout(() => { btn.textContent = '결과 복사'; }, 1800);
 }
 
-function showOverlay(title, score, desc, btnText, onClick, share) {
+function showOverlay(title, score, desc, btnText, onClick, share, upgrades) {
   $('ov-title').textContent = title;
   $('ov-score').textContent = score;
   $('ov-desc').textContent  = desc;
-  $('ov-btn').textContent   = btnText;
-  $('ov-btn').onclick = () => { $('overlay').classList.add('hidden'); onClick(); };
+
+  // 업그레이드를 고르는 화면에서는 버튼 대신 카드가 선택지가 된다
+  $('ov-upgrades').classList.toggle('hidden', !upgrades);
+  $('ov-btn').classList.toggle('hidden', !!upgrades);
+  if (upgrades) renderUpgrades(upgrades);
+
+  if (onClick) {
+    $('ov-btn').textContent = btnText;
+    $('ov-btn').onclick = () => { $('overlay').classList.add('hidden'); onClick(); };
+  }
 
   // 공유는 판이 끝났을 때만. 스테이지 중간엔 아직 자랑할 게 아니다.
   $('ov-share').classList.toggle('hidden', !share);
