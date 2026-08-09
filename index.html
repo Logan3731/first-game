@@ -188,12 +188,30 @@
   .overlay.hidden { display: none; }
   .overlay h2 { font-size: 30px; }
   .overlay p { color: #8b91a3; font-size: 15px; line-height: 1.6; }
+
+  /* 복사될 내용을 그대로 보여준다. 뭐가 붙여넣어질지 알아야 누른다 */
+  .share-preview {
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #b6bcca;
+    background: #1a1d24;
+    border-radius: 10px;
+    padding: 14px 20px;
+    white-space: pre;
+    text-align: left;
+    margin: 0;
+  }
+  .ov-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
   .overlay .big {
     font-size: 44px;
     font-weight: 800;
     color: #ffd75b;
     font-variant-numeric: tabular-nums;
   }
+
+  /* .overlay 규칙보다 뒤에 와야 오버레이에도 제대로 먹는다 */
+  .hidden { display: none; }
 </style>
 </head>
 <body>
@@ -245,7 +263,11 @@
   <h2 id="ov-title"></h2>
   <div class="big" id="ov-score"></div>
   <p id="ov-desc"></p>
-  <button class="btn-play" id="ov-btn"></button>
+  <pre class="share-preview hidden" id="ov-share"></pre>
+  <div class="ov-actions">
+    <button class="btn-play" id="ov-btn"></button>
+    <button class="btn-discard hidden" id="ov-share-btn">결과 복사</button>
+  </div>
 </div>
 
 <script>
@@ -657,16 +679,64 @@ function gameOver() {
       ? `최고 기록 경신! (이전 ${best.toLocaleString()}점)`
       : `스테이지 ${state.stage}에서 종료 · 최고 기록 ${best.toLocaleString()}점`,
     '다시 하기',
-    newGame
+    newGame,
+    true          // 게임오버에서만 공유 UI를 띄운다
   );
 }
 
-function showOverlay(title, score, desc, btnText, onClick) {
+// 붙여넣기 좋은 한 판 요약. 초록/빨강 칸이 이번 판의 궤적이다.
+function shareText() {
+  const cleared = Math.max(0, state.stage - 1);
+  return [
+    '🃏 카드 로그라이트',
+    `스테이지 ${state.stage}에서 종료 · ${state.totalScore.toLocaleString()}점`,
+    `최고 연쇄 ×${state.maxCombo}`,
+    '🟩'.repeat(cleared) + '🟥',
+    location.origin + location.pathname,
+  ].join('\n');
+}
+
+async function copyShare() {
+  const btn = $('ov-share-btn');
+  const text = shareText();
+  let ok = true;
+
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // 클립보드 권한이 막힌 환경 대비
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    } catch { ok = false; }
+  }
+
+  if (ok) track('share-copy');
+  btn.textContent = ok ? '복사됐어!' : '위 내용을 직접 복사해줘';
+  setTimeout(() => { btn.textContent = '결과 복사'; }, 1800);
+}
+
+function showOverlay(title, score, desc, btnText, onClick, share) {
   $('ov-title').textContent = title;
   $('ov-score').textContent = score;
   $('ov-desc').textContent  = desc;
   $('ov-btn').textContent   = btnText;
   $('ov-btn').onclick = () => { $('overlay').classList.add('hidden'); onClick(); };
+
+  // 공유는 판이 끝났을 때만. 스테이지 중간엔 아직 자랑할 게 아니다.
+  $('ov-share').classList.toggle('hidden', !share);
+  $('ov-share-btn').classList.toggle('hidden', !share);
+  if (share) {
+    $('ov-share').textContent     = shareText();
+    $('ov-share-btn').textContent = '결과 복사';
+    $('ov-share-btn').onclick     = copyShare;
+  }
+
   $('overlay').classList.remove('hidden');
 }
 
