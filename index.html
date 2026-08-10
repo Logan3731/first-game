@@ -996,16 +996,16 @@ function shuffle(arr) {
 
 // 손패를 HAND_SIZE까지 채운다. 뽑고 나면 항상 다시 정렬한다.
 function drawUp() {
-  while (state.hand.length < state.handSize && state.deck.length > 0) {
-    state.hand.push(state.deck.pop());
-  }
-  // 덱이 마르고 손패까지 비면 낼 카드가 없어 진행이 막힌다.
-  // 덱을 새로 만들어 보충한다.
-  if (state.hand.length === 0) {
-    state.deck = shuffle(makeDeck());
-    while (state.hand.length < state.handSize && state.deck.length > 0) {
-      state.hand.push(state.deck.pop());
+  // 업그레이드로 핸드·버리기·손패가 늘면 한 스테이지에 뽑는 양이 52장을 넘는다.
+  // 덱이 마르는 즉시 새로 만들어 보충한다.
+  // (예전엔 손패가 "완전히 빌 때"만 새로 만들어서, 덱이 마른 뒤로는
+  //  손패를 다 털기 전까지 보충이 멈춰 보였다)
+  while (state.hand.length < state.handSize) {
+    if (state.deck.length === 0) {
+      state.deck = shuffle(makeDeck());
+      if (state.deck.length === 0) break;   // 덱을 만들 수 없으면 포기 (무한 루프 방지)
     }
+    state.hand.push(state.deck.pop());
   }
   sortHand();
 }
