@@ -189,6 +189,15 @@
   .card-rank { font-size: 24px; font-weight: 800; line-height: 1; }
   .card-suit { font-size: 20px; line-height: 1; }
 
+  /* itch.io 임베드처럼 좁은 폭에서도 카드 8장이 한 줄에 들어가게.
+     (반드시 .card 기본 규칙보다 뒤에 와야 한다 — 미디어 쿼리는 우선순위를 안 올린다) */
+  @media (max-width: 719px) {
+    .card { width: 60px; height: 85px; }
+    .card-rank { font-size: 21px; }
+    .card-suit { font-size: 17px; }
+    .hand { gap: 6px; }
+  }
+
   /* ── 버튼 ──────────────────────────────── */
   .actions { display: flex; gap: 10px; justify-content: center; }
   button {
