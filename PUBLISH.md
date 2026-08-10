@@ -18,7 +18,7 @@
 | Upload | `first-game-itch.zip` → **This file will be played in the browser** 체크 |
 | Embed | Manually set size: **760 × 1000**, Fullscreen 허용 |
 | Genre | Card Game |
-| Tags | `cards`, `roguelite`, `poker`, `singleplayer`, `html5`, `score-attack`, `deckbuilding` |
+| Tags | `cards`, `roguelite`, `poker`, `singleplayer`, `html5`, `score-attack`, `deckbuilding`, `daily` |
 | Language | English, Korean (둘 다 선택) |
 
 > 프로젝트 **URL(주소)은 반드시 영문**으로. 제목에서 자동 생성되는 주소가
@@ -90,6 +90,7 @@ That decision is the entire game.
 - Flush builds, low-hand builds, deck thinning — runs go in different directions
 - About 10 minutes per run, copy your result to share it
 - No install, works on mobile
+- Daily run: everyone gets the same deck each day, one attempt, share your result
 - English and Korean (switch in the top right)
 - Every chain step rings one note higher — you can hear the ladder climb
 ```
