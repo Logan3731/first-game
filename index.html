@@ -387,6 +387,20 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* ── 시작 화면 ─────────────────────────── */
+  /* 게임오버 오버레이는 뒤가 비쳐야 맥락이 보이지만,
+     시작 화면은 뒤에 아무 맥락도 없으므로 불투명해야 한다 */
+  #start {
+    gap: 22px;
+    background: radial-gradient(120% 90% at 50% 0%, #1e2432 0%, #14161c 55%);
+  }
+  .start-top { position: absolute; top: 22px; right: 22px; display: flex; gap: 5px; }
+  .start-title { font-size: 30px; font-weight: 800; letter-spacing: -.01em; }
+  .start-formula { font-size: 38px; }
+  .start-tag { color: #8b91a3; font-size: 15px; max-width: 340px; line-height: 1.6; }
+  .start-note { color: #6f7688; font-size: 13px; min-height: 18px; }
+  #start .ov-actions button { padding: 15px 30px; font-size: 16px; }
+
   /* .overlay 규칙보다 뒤에 와야 오버레이에도 제대로 먹는다 */
   .hidden { display: none; }
 </style>
@@ -400,9 +414,9 @@
       <button class="lang-btn" id="mode-free" data-i18n="mode_free">Free</button>
     </div>
     <div class="bar-group">
-      <button class="lang-btn" id="sound-btn">🔊</button>
-      <button class="lang-btn" id="lang-en">EN</button>
-      <button class="lang-btn" id="lang-ko">한국어</button>
+      <button class="lang-btn" data-sound>🔊</button>
+      <button class="lang-btn" data-lang="en">EN</button>
+      <button class="lang-btn" data-lang="ko">한국어</button>
     </div>
   </div>
 
@@ -467,6 +481,32 @@
     <summary id="guide-summary">Hand guide</summary>
     <div class="guide-list" id="guide-list"></div>
   </details>
+</div>
+
+<div class="overlay" id="start">
+  <div class="start-top">
+    <button class="lang-btn" data-sound>🔊</button>
+    <button class="lang-btn" data-lang="en">EN</button>
+    <button class="lang-btn" data-lang="ko">한국어</button>
+  </div>
+
+  <h1 class="start-title" id="start-title">Chain — Card Roguelite</h1>
+
+  <div class="formula start-formula">
+    <div class="term"><span class="chips">76</span><span class="term-label" data-i18n="lbl_chips">CHIPS</span></div>
+    <span class="times">×</span>
+    <div class="term"><span class="mult">7</span><span class="term-label" data-i18n="lbl_mult">MULT</span></div>
+    <span class="times">×</span>
+    <div class="term"><span class="combo">6</span><span class="term-label" data-i18n="lbl_chain">CHAIN</span></div>
+  </div>
+
+  <p class="start-tag" id="start-tag"></p>
+
+  <div class="ov-actions">
+    <button class="btn-play" id="start-daily"></button>
+    <button class="btn-discard" id="start-free"></button>
+  </div>
+  <p class="start-note" id="start-note"></p>
 </div>
 
 <div class="overlay hidden" id="overlay">
@@ -636,6 +676,11 @@ const I18N = {
 
     mode_daily:  'Daily',
     mode_free:   'Free',
+    start_daily:        n => `Play Daily #${n}`,
+    start_daily_resume: n => `Resume Daily #${n}`,
+    start_daily_done:   n => `Daily #${n} result`,
+    start_free:         'Free play',
+    start_note_done:    "Today's daily is done — a new one tomorrow",
     daily_done:  n => `Daily #${n} — already played`,
     to_free:     'Free play',
 
@@ -700,6 +745,11 @@ const I18N = {
 
     mode_daily:  '데일리',
     mode_free:   '자유',
+    start_daily:        n => `데일리 #${n} 하기`,
+    start_daily_resume: n => `데일리 #${n} 이어하기`,
+    start_daily_done:   n => `데일리 #${n} 결과 보기`,
+    start_free:         '자유 모드',
+    start_note_done:    '오늘 데일리는 끝났어 — 내일 새 문제가 나와',
     daily_done:  n => `데일리 #${n} — 오늘은 이미 했어`,
     to_free:     '자유 모드로',
 
@@ -1840,8 +1890,9 @@ function applyStaticText() {
   $('name-input').placeholder = t('name_hint');   // placeholder는 textContent가 아니라 따로
   document.title = t('title');
   document.documentElement.lang = LANG;
-  $('lang-en').classList.toggle('active', LANG === 'en');
-  $('lang-ko').classList.toggle('active', LANG === 'ko');
+  // 언어 버튼은 상단 바와 시작 화면 두 곳에 있다
+  document.querySelectorAll('[data-lang]').forEach(b =>
+    b.classList.toggle('active', b.dataset.lang === LANG));
 }
 
 function setLang(lang) {
@@ -1849,14 +1900,34 @@ function setLang(lang) {
   localStorage.setItem('lang', lang);
   applyStaticText();
   render();                       // 족보표·안내문 등 동적 문자열까지 다시 그린다
+  if (!$('start').classList.contains('hidden')) showStart();   // 시작 화면 문구도
 }
 
 $('btn-play').onclick    = play;
 $('btn-discard').onclick = discard;
 $('sort-rank').onclick   = () => setSort('rank');
 $('sort-suit').onclick   = () => setSort('suit');
-$('lang-en').onclick     = () => setLang('en');
-$('lang-ko').onclick     = () => setLang('ko');
+document.querySelectorAll('[data-lang]').forEach(b =>
+  b.onclick = () => setLang(b.dataset.lang));
+
+// 시작 화면. 게임에 바로 떨어지지 않게 하고, 여기서의 클릭이
+// 브라우저의 오디오 잠금도 풀어준다 (첫 소리가 삼켜지지 않는다).
+function showStart() {
+  const 완료   = dailyResult();
+  const 진행중 = !!localStorage.getItem(runKey());
+  const n = todayNumber();
+
+  $('start-title').textContent = t('title');
+  $('start-tag').textContent   = t('chain_intro');
+  $('start-daily').textContent = 완료   ? t('start_daily_done', n)
+                               : 진행중 ? t('start_daily_resume', n)
+                               :          t('start_daily', n);
+  $('start-free').textContent  = t('start_free');
+  $('start-note').textContent  = 완료 ? t('start_note_done') : '';
+  $('start').classList.remove('hidden');
+}
+
+function hideStart() { $('start').classList.add('hidden'); }
 
 function updateModeButtons() {
   $('mode-daily').classList.toggle('active', DAILY_MODE);
@@ -1892,15 +1963,21 @@ function setMode(daily) {
 function setSound(on) {
   SOUND_ON = on;
   localStorage.setItem('sound', on ? 'on' : 'off');
-  $('sound-btn').textContent = on ? '🔊' : '🔇';
-  $('sound-btn').classList.toggle('active', on);
+  syncSoundButtons();
   if (on) sfx.select();          // 켠 순간 들려줘야 켜진 걸 안다
 }
-$('sound-btn').onclick = () => setSound(!SOUND_ON);
 
-// 저장된 설정을 화면에 반영 (여기선 소리를 내지 않는다)
-$('sound-btn').textContent = SOUND_ON ? '🔊' : '🔇';
-$('sound-btn').classList.toggle('active', SOUND_ON);
+function syncSoundButtons() {
+  document.querySelectorAll('[data-sound]').forEach(b => {
+    b.textContent = SOUND_ON ? '🔊' : '🔇';
+    b.classList.toggle('active', SOUND_ON);
+  });
+}
+
+document.querySelectorAll('[data-sound]').forEach(b =>
+  b.onclick = () => setSound(!SOUND_ON));
+
+syncSoundButtons();   // 저장된 설정을 화면에 반영 (여기선 소리를 내지 않는다)
 
 // 펼칠 때마다 새로 불러온다 (다른 사람 점수가 그새 올라갔을 수 있다)
 $('rank').addEventListener('toggle', () => { if ($('rank').open) loadRankPanel(); });
@@ -1917,12 +1994,16 @@ $('name-input').onkeydown = e => { if (e.key === 'Enter') $('name-save').click()
 $('mode-daily').onclick = () => setMode(true);
 $('mode-free').onclick  = () => setMode(false);
 
+$('start-daily').onclick = () => { hideStart(); setMode(true); };
+$('start-free').onclick  = () => { hideStart(); setMode(false); };
+
 // 오늘 데일리를 아직 안 했으면 데일리로 시작한다
 DAILY_MODE = !dailyResult();
 updateModeButtons();
 
 applyStaticText();
 newGame();
+showStart();
 </script>
 
 <!-- 분석: GoatCounter. 쿠키를 안 쓰므로 동의 배너가 필요 없다.
