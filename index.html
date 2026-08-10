@@ -620,6 +620,11 @@ function addBonus(s, type, chips, mult) {
   b.mult  += mult;
 }
 
+// 모든 족보에 한꺼번에. HAND_TYPES가 아래에 정의되므로 호출 시점에 읽는다.
+function addBonusAll(s, chips, mult) {
+  Object.keys(HAND_TYPES).forEach(k => addBonus(s, k, chips, mult));
+}
+
 const UPGRADES = [
   { id: 'hands',
     name: { en: '+1 Hand',       ko: '핸드 +1' },
@@ -655,12 +660,97 @@ const UPGRADES = [
     desc: { en: 'Makes this a number-collecting run', ko: '같은 숫자를 모으는 판이 된다' },
     apply: s => { addBonus(s, 'threeKind', 0, 2); addBonus(s, 'fourKind', 0, 2); } },
 
+  { id: 'fullhouse',
+    name: { en: 'Full House +4 Mult', ko: '풀하우스 배수 +4' },
+    desc: { en: 'A heavy mid-ladder rung', ko: '사다리 중간을 묵직하게 만든다' },
+    apply: s => addBonus(s, 'fullHouse', 0, 4) },
+  { id: 'highcard',
+    name: { en: 'High Card +6 Mult', ko: '하이카드 배수 +6' },
+    desc: { en: 'Junk hands become real ladder rungs', ko: '버리던 패가 사다리 칸이 된다' },
+    apply: s => addBonus(s, 'highCard', 0, 6) },
+  { id: 'sflush',
+    name: { en: 'Straight Flush +8 Mult', ko: '스트레이트 플러시 배수 +8' },
+    desc: { en: 'Almost never happens. Enormous when it does', ko: '거의 안 나오지만 나오면 엄청나다' },
+    apply: s => addBonus(s, 'straightFlush', 0, 8) },
+  { id: 'allchips',
+    name: { en: 'All hands +8 Chips', ko: '모든 족보 칩 +8' },
+    desc: { en: 'Every rung of the ladder gets taller', ko: '사다리의 모든 칸이 높아진다' },
+    apply: s => addBonusAll(s, 8, 0) },
+
+  // ── 덱 조작 ──
   // 칩은 올라가지만 사다리의 낮은 칸이 사라진다. 공짜가 아니다.
   { id: 'strip',
     name: { en: 'Remove 2·3·4 from deck', ko: '덱에서 2·3·4 제거' },
     desc: { en: "Hands get stronger, but you can't start the chain low",
-            ko: '패가 전반적으로 세지지만 연쇄를 낮게 시작할 수 없다' },
+            ko: '패가 세지지만 연쇄를 낮게 시작할 수 없다' },
     max: 1, apply: s => [2, 3, 4].forEach(r => s.removedRanks.add(r)) },
+  { id: 'nofaces',
+    name: { en: 'Remove J·Q·K from deck', ko: '덱에서 J·Q·K 제거' },
+    desc: { en: 'Lower ceiling, but the ladder rungs get closer together',
+            ko: '천장은 낮아지지만 사다리 칸이 촘촘해진다' },
+    max: 1, apply: s => [11, 12, 13].forEach(r => s.removedRanks.add(r)) },
+  { id: 'aces',
+    name: { en: 'Add 4 Aces to deck', ko: '덱에 A 4장 추가' },
+    desc: { en: 'The strongest card, more often', ko: '가장 센 카드가 더 자주 나온다' },
+    max: 2, apply: s => s.addedRanks.push(1) },
+
+  // ── 연쇄 규칙 자체를 바꾸는 것들 ──
+  { id: 'equal',
+    name: { en: 'Ties keep the chain', ko: '같은 칩도 연쇄 유지' },
+    desc: { en: 'Matching the last hand no longer breaks it', ko: '직전과 같은 칩이어도 안 끊긴다' },
+    max: 1, apply: s => s.chainEqual = true },
+  { id: 'soft',
+    name: { en: 'Soft landing', ko: '연쇄 반토막' },
+    desc: { en: 'Breaking drops the chain to half instead of the bottom',
+            ko: '끊겨도 바닥이 아니라 절반까지만 떨어진다' },
+    max: 1, apply: s => s.chainSoft = true },
+  { id: 'floor',
+    name: { en: 'Chain floor +1', ko: '연쇄 바닥 +1' },
+    desc: { en: 'The chain never falls below this', ko: '연쇄가 이 아래로는 안 내려간다' },
+    max: 3, apply: s => s.comboFloor += 1 },
+  { id: 'surge',
+    name: { en: 'Surge — double at chain 5', ko: '폭주 — 연쇄 5부터 배수 2배' },
+    desc: { en: 'Climbing high pays twice', ko: '높이 쌓으면 두 배로 돌려받는다' },
+    max: 1, apply: s => s.surgeAt = 5 },
+
+  // ── 대가가 있는 것들 ──
+  { id: 'glass',
+    name: { en: 'Glass cannon — 1 less hand', ko: '유리대포 — 핸드 1 감소' },
+    desc: { en: 'Every hand type +3 Mult, but one less hand per stage',
+            ko: '모든 족보 배수 +3, 대신 스테이지당 한 번 덜 낸다' },
+    ok: s => s.handsMax > 2,
+    apply: s => { s.handsMax -= 1; addBonusAll(s, 0, 3); } },
+  { id: 'allin',
+    name: { en: 'All in — no fishing', ko: '올인 — 낚시 금지' },
+    desc: { en: '+2 hands, but 2 fewer discards', ko: '핸드 +2, 대신 버리기 -2' },
+    ok: s => s.discardsMax >= 2,
+    apply: s => { s.handsMax += 2; s.discardsMax -= 2; } },
+  { id: 'narrow',
+    name: { en: 'Tunnel vision', ko: '좁은 시야' },
+    desc: { en: 'All hands +18 Chips, but 2 fewer cards in hand',
+            ko: '모든 족보 칩 +18, 대신 손패 2장 감소' },
+    ok: s => s.handSize > 6,
+    apply: s => { s.handSize -= 2; addBonusAll(s, 18, 0); } },
+  { id: 'fragile',
+    name: { en: 'No safety net', ko: '안전망 없음' },
+    desc: { en: 'Chain cap +6, but a broken chain scores nothing',
+            ko: '연쇄 상한 +6, 대신 끊긴 핸드는 0점' },
+    max: 1, apply: s => { s.comboCap += 6; s.zeroOnBreak = true; } },
+  { id: 'bank',
+    name: { en: 'Bank unused hands', ko: '남은 핸드를 점수로' },
+    desc: { en: '+600 per hand left when you clear a stage',
+            ko: '클리어 시 남은 핸드 1개당 600점' },
+    max: 2, apply: s => s.bankPerHand += 600 },
+  { id: 'deepcut',
+    name: { en: 'Deep cut', ko: '깊게 파기' },
+    desc: { en: '+4 discards, but 1 fewer card in hand', ko: '버리기 +4, 대신 손패 1장 감소' },
+    ok: s => s.handSize > 5,
+    apply: s => { s.discardsMax += 4; s.handSize -= 1; } },
+  { id: 'wide',
+    name: { en: 'Wide open', ko: '넓게 보기' },
+    desc: { en: '+2 cards in hand, but 1 fewer discard', ko: '손패 +2장, 대신 버리기 -1' },
+    ok: s => s.discardsMax >= 1,
+    apply: s => { s.handSize += 2; s.discardsMax -= 1; } },
 ];
 
 // 족보별 [기본칩, 배수]
@@ -739,7 +829,16 @@ function newGame() {
     comboCap:     COMBO_CAP,
     bonus:        {},          // 족보별 { chips, mult } 추가치
     removedRanks: new Set(),   // 덱에서 빼버린 숫자
+    addedRanks:   [],          // 덱에 더 넣은 숫자
     taken:        {},          // 업그레이드 id별 획득 횟수
+
+    // 연쇄 규칙 자체를 바꾸는 값들
+    comboFloor:  1,            // 끊겼을 때 떨어지는 바닥
+    chainSoft:   false,        // 끊겨도 절반까지만 떨어진다
+    chainEqual:  false,        // 칩이 같아도 연쇄가 이어진다
+    surgeAt:     0,            // 이 연쇄 이상이면 배수 2배 (0이면 없음)
+    zeroOnBreak: false,        // 끊긴 핸드는 점수가 0
+    bankPerHand: 0,            // 클리어 시 남은 핸드 1개당 보너스
   };
   track('run-start');
   startStage();
@@ -764,6 +863,10 @@ function makeDeck() {
       deck.push({ rank, suit });
     }
   }
+  // 업그레이드로 더 넣은 카드
+  for (const rank of state.addedRanks) {
+    for (let suit = 0; suit < 4; suit++) deck.push({ rank, suit });
+  }
   return deck;
 }
 
@@ -779,6 +882,14 @@ function shuffle(arr) {
 function drawUp() {
   while (state.hand.length < state.handSize && state.deck.length > 0) {
     state.hand.push(state.deck.pop());
+  }
+  // 덱이 마르고 손패까지 비면 낼 카드가 없어 진행이 막힌다.
+  // 덱을 새로 만들어 보충한다.
+  if (state.hand.length === 0) {
+    state.deck = shuffle(makeDeck());
+    while (state.hand.length < state.handSize && state.deck.length > 0) {
+      state.hand.push(state.deck.pop());
+    }
   }
   sortHand();
 }
@@ -928,7 +1039,18 @@ function renderGuide() {
 // → 같은 족보를 반복하는 것만으로는 오래 못 가고,
 //   "낮은 패를 먼저 쓰고 센 패를 아껴두는" 판단이 생긴다.
 function comboFor(chips) {
-  return chips > state.lastChips ? Math.min(state.combo + 1, state.comboCap) : 1;
+  const 이김 = state.chainEqual ? chips >= state.lastChips : chips > state.lastChips;
+  if (이김) return Math.min(state.combo + 1, state.comboCap);
+
+  // 끊겼을 때 어디까지 떨어지는가 (업그레이드로 완화할 수 있다)
+  const 바닥 = state.comboFloor;
+  return state.chainSoft ? Math.max(바닥, Math.floor(state.combo / 2)) : 바닥;
+}
+
+// 연쇄가 일정 단계를 넘으면 배수가 2배가 되는 업그레이드가 있다.
+// 미리보기와 실제 계산이 같은 값을 쓰도록 한 곳에 모은다.
+function effectiveMult(baseMult, combo) {
+  return state.surgeAt && combo >= state.surgeAt ? baseMult * 2 : baseMult;
 }
 
 
@@ -968,15 +1090,19 @@ function play() {
 
   // 연쇄 갱신 → 점수에 곱한다
   state.combo = comboFor(result.chips);
+  const 끊김 = state.combo < prevCombo;
 
   // 쌓이면 계단으로 올라가는 소리, 끊기면 떨어지는 소리
-  if (prevCombo > 1 && state.combo === 1) sfx.chainBreak();
+  if (끊김) sfx.chainBreak();
   sfx.score(state.combo);
   state.maxCombo = Math.max(state.maxCombo, state.combo);
   state.lastChips = result.chips;
   state.lastName  = result.name;
   result.combo = state.combo;
-  result.score = result.chips * result.mult * result.combo;
+  result.mult  = effectiveMult(result.mult, state.combo);
+  result.score = (state.zeroOnBreak && 끊김)
+    ? 0
+    : result.chips * result.mult * result.combo;
 
   state.locked = true;
   state.handsLeft--;
@@ -1045,8 +1171,9 @@ function render() {
       $('hand-name').textContent = preview.name;
       $('hand-name').classList.add('active');
       $('chips').textContent = preview.chips;
-      $('mult').textContent  = preview.mult;
-      setCombo(comboFor(preview.chips), false);
+      const c = comboFor(preview.chips);
+      $('mult').textContent  = effectiveMult(preview.mult, c);
+      setCombo(c, false);
     } else {
       $('hand-name').textContent = t('pick_cards');
       $('hand-name').classList.remove('active');
@@ -1126,7 +1253,10 @@ function renderProjection(preview) {
     return;
   }
 
-  const gain   = preview.chips * preview.mult * comboFor(preview.chips);
+  const c      = comboFor(preview.chips);
+  const gain   = (state.zeroOnBreak && c < state.combo)
+    ? 0
+    : preview.chips * effectiveMult(preview.mult, c) * c;
   const after  = state.stageScore + gain;
   const target = targetFor(state.stage);
   const 클리어 = after >= target;
@@ -1169,7 +1299,10 @@ function bestScore() {
 
 // 아직 최대 획득 횟수에 안 걸린 것들 중에서 n개를 뽑는다
 function pickUpgrades(n) {
-  const pool = UPGRADES.filter(u => (state.taken[u.id] || 0) < (u.max || Infinity));
+  const pool = UPGRADES.filter(u =>
+    (state.taken[u.id] || 0) < (u.max || Infinity) &&
+    (!u.ok || u.ok(state))          // 지금 상태에서 말이 안 되는 건 후보에서 뺀다
+  );
   return shuffle([...pool]).slice(0, n);
 }
 
@@ -1196,6 +1329,10 @@ function renderUpgrades(list) {
 }
 
 function stageClear() {
+  // 남은 핸드를 점수로 바꿔주는 업그레이드
+  const bank = state.handsLeft * state.bankPerHand;
+  if (bank > 0) { state.stageScore += bank; state.totalScore += bank; }
+
   track('stage-clear-' + state.stage);
   sfx.clear();
   showOverlay(
