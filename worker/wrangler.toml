@@ -1,0 +1,19 @@
+# Cloudflare Worker 배포 설정
+#
+# 대시보드의 Bindings 화면에서 KV 목록이 안 뜨는 문제를 우회한다.
+# 목록에서 고르는 대신 네임스페이스 ID를 직접 적는다.
+#
+# 배포:
+#   cd worker
+#   npx wrangler login     ← 브라우저가 열리고 승인하면 끝 (한 번만)
+#   npx wrangler deploy
+
+name = "chain-leaderboard"
+main = "leaderboard.js"
+compatibility_date = "2026-08-10"
+
+# Workers KV — chain-scores
+# 코드에서 env.SCORES 로 접근한다
+[[kv_namespaces]]
+binding = "SCORES"
+id = "67d954a3361d46fcadeaa48a1c2572d9"
