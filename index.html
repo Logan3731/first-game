@@ -314,6 +314,46 @@
     text-align: left;
     margin: 0;
   }
+  /* ── 랭킹 ──────────────────────────────── */
+  .board {
+    background: #1a1d24;
+    border-radius: 12px;
+    padding: 14px 16px;
+    width: 100%;
+    max-width: 380px;
+    text-align: left;
+  }
+  .board-head { font-size: 12px; color: #8b91a3; margin-bottom: 8px; }
+  .board-list { display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+  .board-row {
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 8px;
+    align-items: baseline;
+    padding: 5px 7px;
+    border-radius: 6px;
+    color: #8b91a3;
+  }
+  .board-row.me { background: #2a2f3c; color: #e8eaf0; }
+  .board-rank  { color: #565c6e; font-variant-numeric: tabular-nums; }
+  .board-row.me .board-rank { color: #ffd75b; font-weight: 700; }
+  .board-name-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board-score { font-variant-numeric: tabular-nums; }
+
+  .board-name { display: flex; gap: 6px; margin-top: 10px; }
+  .board-name input {
+    flex: 1;
+    min-width: 0;
+    background: #12141a;
+    border: 1px solid #2f3542;
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: #e8eaf0;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .board-name button { padding: 9px 16px; font-size: 14px; }
+
   .ov-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
   .overlay .big {
     font-size: 44px;
@@ -404,6 +444,15 @@
   <div class="big" id="ov-score"></div>
   <p id="ov-desc"></p>
   <pre class="share-preview hidden" id="ov-share"></pre>
+
+  <div class="board hidden" id="ov-board">
+    <div class="board-head" id="board-head"></div>
+    <div class="board-list" id="board-list"></div>
+    <div class="board-name hidden" id="board-name">
+      <input id="name-input" maxlength="12" placeholder="name">
+      <button class="btn-play" id="name-save" data-i18n="name_save">OK</button>
+    </div>
+  </div>
   <div class="upgrades hidden" id="ov-upgrades"></div>
   <div class="ov-actions">
     <button class="btn-play" id="ov-btn"></button>
@@ -560,6 +609,15 @@ const I18N = {
     daily_done:  n => `Daily #${n} — already played`,
     to_free:     'Free play',
 
+    board_daily:    n => `Daily #${n} ranking`,
+    board_free:     'Free play ranking',
+    board_loading:  'Loading…',
+    board_error:    'Ranking unavailable',
+    board_empty:    'No scores yet — be the first',
+    board_ask_name: 'Enter a name to join the ranking',
+    name_hint:      'name',
+    name_save:      'OK',
+
     share_title: '🃏 Chain — Card Roguelite',
     share_daily: n => `Daily #${n}`,
     share_line1: (n, score) => `Ended at stage ${n} · ${score} pts`,
@@ -612,6 +670,15 @@ const I18N = {
     daily_done:  n => `데일리 #${n} — 오늘은 이미 했어`,
     to_free:     '자유 모드로',
 
+    board_daily:    n => `데일리 #${n} 순위`,
+    board_free:     '자유 모드 순위',
+    board_loading:  '불러오는 중…',
+    board_error:    '순위를 못 불러왔어',
+    board_empty:    '아직 아무도 없어 — 1등 해봐',
+    board_ask_name: '이름을 넣으면 순위에 올라가',
+    name_hint:      '이름',
+    name_save:      '등록',
+
     share_title: '🃏 연쇄 — 카드 로그라이트',
     share_daily: n => `데일리 #${n}`,
     share_line1: (n, score) => `스테이지 ${n}에서 종료 · ${score}점`,
@@ -651,6 +718,9 @@ const L = o => o[LANG] || o.en;
 // itch.io 등에 올리면 게임은 CDN 도메인의 iframe에서 도는데,
 // 그 주소를 그대로 공유하면 눌러도 제대로 안 열린다.
 const SHARE_URL = 'https://logan3731.github.io/first-game/';
+
+// 랭킹 서버 (Cloudflare Worker). 비워두면 랭킹 기능이 통째로 꺼진다.
+const BOARD_URL = 'https://chain-leaderboard.xheuri123.workers.dev';
 
 
 // ── 데일리 ─────────────────────────────────────
@@ -1585,6 +1655,78 @@ async function copyShare() {
   setTimeout(() => { btn.textContent = t('copy_result'); }, 1800);
 }
 
+// ══════════════════════════════════════════════
+//  랭킹
+// ══════════════════════════════════════════════
+
+const playerName = () => localStorage.getItem('name') || '';
+let boardResult = null;     // 지금 등록하려는 결과
+
+// 이름은 다른 사람이 보낸 값이라 그대로 넣으면 안 된다
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function boardMessage(msg) {
+  $('board-list').innerHTML = `<div class="board-row">${escapeHtml(msg)}</div>`;
+}
+
+function renderBoard(entries) {
+  $('board-head').textContent = DAILY_MODE ? t('board_daily', todayNumber()) : t('board_free');
+  if (!entries || !entries.length) return boardMessage(t('board_empty'));
+
+  const 나 = playerName();
+  $('board-list').innerHTML = entries.slice(0, 10).map((e, i) =>
+    `<div class="board-row${나 && e.name === 나 ? ' me' : ''}">`
+    + `<span class="board-rank">${i + 1}</span>`
+    + `<span class="board-name-cell">${escapeHtml(e.name)}</span>`
+    + `<span class="board-score">${Number(e.score).toLocaleString()}</span>`
+    + '</div>').join('');
+}
+
+async function submitScore(r) {
+  if (!BOARD_URL || !r) return;
+  const name = playerName();
+  if (!name) return;
+
+  boardMessage(t('board_loading'));
+  try {
+    const res = await fetch(BOARD_URL + '/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode:  r.daily ? 'daily' : 'free',
+        day:   r.daily || 0,
+        name,  score: r.score, stage: r.stage, combo: r.combo,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderBoard(data.entries);
+    track('board-submit');
+  } catch (e) {
+    boardMessage(t('board_error'));
+  }
+}
+
+// 게임오버 화면에 랭킹을 띄운다. 이름이 없으면 먼저 물어본다.
+function showBoard(r) {
+  if (!BOARD_URL) return;
+  boardResult = r;
+  $('ov-board').classList.remove('hidden');
+  $('board-head').textContent = DAILY_MODE ? t('board_daily', todayNumber()) : t('board_free');
+
+  if (playerName()) {
+    $('board-name').classList.add('hidden');
+    submitScore(r);
+  } else {
+    $('board-name').classList.remove('hidden');
+    $('name-input').value = '';
+    boardMessage(t('board_ask_name'));
+  }
+}
+
 function showOverlay(title, score, desc, btnText, onClick, share, upgrades, shareData) {
   pendingShare = shareData || null;
   $('ov-title').textContent = title;
@@ -1608,6 +1750,12 @@ function showOverlay(title, score, desc, btnText, onClick, share, upgrades, shar
     $('ov-share').textContent     = shareText(pendingShare);
     $('ov-share-btn').textContent = t('copy_result');
     $('ov-share-btn').onclick     = copyShare;
+    showBoard(pendingShare || {
+      stage: state.stage, score: state.totalScore, combo: state.maxCombo,
+      daily: DAILY_MODE ? todayNumber() : 0,
+    });
+  } else {
+    $('ov-board').classList.add('hidden');
   }
 
   $('overlay').classList.remove('hidden');
@@ -1621,6 +1769,7 @@ function applyStaticText() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     el.textContent = t(el.dataset.i18n);
   });
+  $('name-input').placeholder = t('name_hint');   // placeholder는 textContent가 아니라 따로
   document.title = t('title');
   document.documentElement.lang = LANG;
   $('lang-en').classList.toggle('active', LANG === 'en');
@@ -1683,6 +1832,15 @@ $('sound-btn').onclick = () => setSound(!SOUND_ON);
 // 저장된 설정을 화면에 반영 (여기선 소리를 내지 않는다)
 $('sound-btn').textContent = SOUND_ON ? '🔊' : '🔇';
 $('sound-btn').classList.toggle('active', SOUND_ON);
+
+$('name-save').onclick = () => {
+  const v = $('name-input').value.trim().slice(0, 12);
+  if (!v) return;
+  localStorage.setItem('name', v);
+  $('board-name').classList.add('hidden');
+  submitScore(boardResult);
+};
+$('name-input').onkeydown = e => { if (e.key === 'Enter') $('name-save').click(); };
 
 $('mode-daily').onclick = () => setMode(true);
 $('mode-free').onclick  = () => setMode(false);
