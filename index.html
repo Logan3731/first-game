@@ -325,39 +325,45 @@
     text-align: left;
   }
   .board-head { font-size: 12px; color: #8b91a3; margin-bottom: 8px; }
-  .board-list { display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
-  .board-row {
-    display: grid;
-    grid-template-columns: 22px 1fr 44px 40px auto;
-    gap: 7px;
-    align-items: baseline;
-    padding: 5px 7px;
-    border-radius: 6px;
-    color: #8b91a3;
-  }
-  .board-row.me { background: #2a2f3c; color: #e8eaf0; }
-  .board-rank  { color: #565c6e; font-variant-numeric: tabular-nums; }
-  .board-row.me .board-rank { color: #ffd75b; font-weight: 700; }
-  .board-name-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .board-stage, .board-chain, .board-score { font-variant-numeric: tabular-nums; text-align: right; }
-  .board-stage { color: #6f7688; }
-  .board-chain { color: #5f8f72; }
-  .board-row.me .board-chain { color: #7bff9b; }
 
-  /* 열 이름 줄 — 숫자만 있으면 뭐가 뭔지 모른다 */
-  .board-cols {
-    display: grid;
-    grid-template-columns: 22px 1fr 44px 40px auto;
-    gap: 7px;
-    padding: 0 7px 4px;
+  /* 머리글과 값이 한 표 안에 있어야 열 너비가 같아진다.
+     따로 두면 마지막 열이 '점수'와 '582,415' 기준으로 각자 계산돼 어긋난다 */
+  .board-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .board-table th {
     font-size: 10px;
+    font-weight: 400;
     color: #4c5261;
     letter-spacing: .03em;
+    padding: 0 6px 5px;
+    text-align: right;
+    white-space: nowrap;
   }
-  .board-cols span:nth-child(n+3) { text-align: right; }
+  .board-table td {
+    padding: 5px 6px;
+    color: #8b91a3;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .board-table th:nth-child(-n+2),
+  .board-table td:nth-child(-n+2) { text-align: left; }
+
+  .board-table tr.me td { background: #2a2f3c; color: #e8eaf0; }
+  .board-table tr.me td:first-child { border-radius: 6px 0 0 6px; }
+  .board-table tr.me td:last-child  { border-radius: 0 6px 6px 0; }
+
+  .board-rank { color: #565c6e; width: 24px; }
+  .board-table tr.me .board-rank { color: #ffd75b; font-weight: 700; }
+  .board-name-cell { width: 99%; }          /* 남는 폭을 이름이 가져간다 */
+  .board-chain { color: #5f8f72; }
+  .board-table tr.me .board-chain { color: #7bff9b; }
 
   /* 메시지 한 줄 (불러오는 중 / 없음 / 오류) */
-  .board-msg { padding: 6px 7px; color: #8b91a3; }
+  .board-msg { padding: 6px 7px; color: #8b91a3; font-size: 13px; }
 
   .board-name { display: flex; gap: 6px; margin-top: 10px; }
   .board-name input {
@@ -447,6 +453,11 @@
     <button class="btn-discard" id="btn-discard" data-i18n="btn_discard" disabled>Discard</button>
   </div>
 
+  <details class="guide" id="rank">
+    <summary id="rank-summary">Ranking</summary>
+    <div class="guide-list" id="rank-body"></div>
+  </details>
+
   <details class="guide hidden" id="owned">
     <summary id="owned-summary">Your upgrades</summary>
     <div class="guide-list" id="owned-list"></div>
@@ -466,13 +477,7 @@
 
   <div class="board hidden" id="ov-board">
     <div class="board-head" id="board-head"></div>
-    <div class="board-cols hidden" id="board-cols">
-      <span></span><span></span>
-      <span data-i18n="col_stage">Stage</span>
-      <span data-i18n="col_chain">Chain</span>
-      <span data-i18n="col_score">Score</span>
-    </div>
-    <div class="board-list" id="board-list"></div>
+    <div id="board-list"></div>
     <div class="board-name hidden" id="board-name">
       <input id="name-input" maxlength="12" placeholder="name">
       <button class="btn-play" id="name-save" data-i18n="name_save">OK</button>
@@ -1442,6 +1447,9 @@ function render() {
     renderProjection(preview);
   }
 
+  $('rank').classList.toggle('hidden', !BOARD_URL);
+  $('rank-summary').textContent = DAILY_MODE ? t('board_daily', todayNumber()) : t('board_free');
+
   renderOwned();
   renderGuide();
 
@@ -1699,25 +1707,50 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+const boardMsg = msg => `<div class="board-msg">${escapeHtml(msg)}</div>`;
+
 function boardMessage(msg) {
-  $('board-cols').classList.add('hidden');
-  $('board-list').innerHTML = `<div class="board-msg">${escapeHtml(msg)}</div>`;
+  $('board-list').innerHTML = boardMsg(msg);
+}
+
+// 순위표를 표로 그린다. 오버레이와 게임 중 패널이 같은 함수를 쓴다.
+function boardTable(entries) {
+  if (!entries || !entries.length) return boardMsg(t('board_empty'));
+
+  const 나 = playerName();
+  const 행 = entries.slice(0, 10).map((e, i) =>
+    `<tr class="${나 && e.name === 나 ? 'me' : ''}">`
+    + `<td class="board-rank">${i + 1}</td>`
+    + `<td class="board-name-cell">${escapeHtml(e.name)}</td>`
+    + `<td>${Number(e.stage) || '-'}</td>`
+    + `<td class="board-chain">×${Number(e.combo) || 0}</td>`
+    + `<td>${Number(e.score).toLocaleString()}</td>`
+    + '</tr>').join('');
+
+  return '<table class="board-table"><thead><tr>'
+       + `<th></th><th></th><th>${t('col_stage')}</th>`
+       + `<th>${t('col_chain')}</th><th>${t('col_score')}</th>`
+       + `</tr></thead><tbody>${행}</tbody></table>`;
 }
 
 function renderBoard(entries) {
   $('board-head').textContent = DAILY_MODE ? t('board_daily', todayNumber()) : t('board_free');
-  if (!entries || !entries.length) return boardMessage(t('board_empty'));
+  $('board-list').innerHTML = boardTable(entries);
+}
 
-  $('board-cols').classList.remove('hidden');
-  const 나 = playerName();
-  $('board-list').innerHTML = entries.slice(0, 10).map((e, i) =>
-    `<div class="board-row${나 && e.name === 나 ? ' me' : ''}">`
-    + `<span class="board-rank">${i + 1}</span>`
-    + `<span class="board-name-cell">${escapeHtml(e.name)}</span>`
-    + `<span class="board-stage">${Number(e.stage) || '-'}</span>`
-    + `<span class="board-chain">×${Number(e.combo) || 0}</span>`
-    + `<span class="board-score">${Number(e.score).toLocaleString()}</span>`
-    + '</div>').join('');
+// 게임 중에도 순위를 볼 수 있는 패널. 펼칠 때마다 새로 불러온다.
+async function loadRankPanel() {
+  const box = $('rank-body');
+  if (!BOARD_URL) return;
+  box.innerHTML = boardMsg(t('board_loading'));
+  try {
+    const q = DAILY_MODE ? `?mode=daily&day=${todayNumber()}` : '?mode=free';
+    const res = await fetch(BOARD_URL + '/top' + q);
+    const data = await res.json();
+    box.innerHTML = boardTable(data.entries);
+  } catch (e) {
+    box.innerHTML = boardMsg(t('board_error'));
+  }
 }
 
 async function submitScore(r) {
@@ -1853,6 +1886,7 @@ function setMode(daily) {
   updateModeButtons();
   $('overlay').classList.add('hidden');
   newGame();
+  if ($('rank').open) loadRankPanel();   // 모드가 바뀌면 순위표도 바뀐다
 }
 
 function setSound(on) {
@@ -1867,6 +1901,9 @@ $('sound-btn').onclick = () => setSound(!SOUND_ON);
 // 저장된 설정을 화면에 반영 (여기선 소리를 내지 않는다)
 $('sound-btn').textContent = SOUND_ON ? '🔊' : '🔇';
 $('sound-btn').classList.toggle('active', SOUND_ON);
+
+// 펼칠 때마다 새로 불러온다 (다른 사람 점수가 그새 올라갔을 수 있다)
+$('rank').addEventListener('toggle', () => { if ($('rank').open) loadRankPanel(); });
 
 $('name-save').onclick = () => {
   const v = $('name-input').value.trim().slice(0, 12);
