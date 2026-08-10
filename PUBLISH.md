@@ -24,6 +24,11 @@
 > 프로젝트 **URL(주소)은 반드시 영문**으로. 제목에서 자동 생성되는 주소가
 > 한글이면 예약어와 충돌해서 저장이 안 된다. 예: `chain-card-roguelite`
 
+### AI generation disclosure
+
+`Yes`를 고르고, 종류는 **Graphics · Sounds · Text & Dialog · Code 네 개 모두 체크**.
+소리도 코드로 합성하므로 Sounds까지 해당된다.
+
 ---
 
 ## itch.io 본문
@@ -86,6 +91,7 @@ That decision is the entire game.
 - About 10 minutes per run, copy your result to share it
 - No install, works on mobile
 - English and Korean (switch in the top right)
+- Every chain step rings one note higher — you can hear the ladder climb
 ```
 
 ---

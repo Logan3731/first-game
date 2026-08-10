@@ -315,6 +315,7 @@
 
 <div id="app">
   <div class="lang-bar">
+    <button class="lang-btn" id="sound-btn">🔊</button>
     <button class="lang-btn" id="lang-en">EN</button>
     <button class="lang-btn" id="lang-ko">한국어</button>
   </div>
@@ -417,6 +418,70 @@ function playtimeBucket(sec) {
   if (sec < 1200) return 'playtime-10-20m';
   return 'playtime-20m+';
 }
+
+
+// ── 소리 ───────────────────────────────────────
+// 파일 없이 Web Audio로 합성한다. 에셋이 0개라 HTML 한 장 구조가 유지된다.
+let audioCtx = null;
+let SOUND_ON = localStorage.getItem('sound') !== 'off';
+
+function ac() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// 음 하나. slideTo를 주면 그 주파수까지 미끄러진다.
+function tone(freq, { dur = .12, type = 'triangle', gain = .12, delay = 0, slideTo = null } = {}) {
+  if (!SOUND_ON) return;
+  try {
+    const ctx = ac();
+    const t0  = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+
+    // 딱딱 끊기지 않게 짧게 올렸다 지수적으로 내린다
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + .008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+    osc.connect(g).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + .02);
+  } catch (e) { /* 오디오가 막힌 환경에서도 게임은 굴러가야 한다 */ }
+}
+
+// 5음 음계. 어떤 조합으로 울려도 불협이 안 생긴다.
+const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+const C4 = 261.63;
+const step = s => C4 * Math.pow(2, s / 12);
+
+const sfx = {
+  select:   () => tone(880, { dur: .05, type: 'square', gain: .05 }),
+  deselect: () => tone(620, { dur: .05, type: 'square', gain: .04 }),
+  discard:  () => tone(300, { dur: .18, type: 'sawtooth', gain: .05, slideTo: 120 }),
+
+  // 연쇄가 높을수록 음이 계단으로 더 높이 올라간다.
+  // 숫자를 안 봐도 지금 잘 쌓이고 있다는 걸 귀로 알게 된다.
+  score: combo => {
+    const n = Math.max(1, Math.min(combo, PENTA.length));
+    for (let i = 0; i < n; i++) {
+      tone(step(PENTA[i]), { dur: .16, gain: .11, delay: i * .055 });
+    }
+  },
+
+  chainBreak: () => tone(330, { dur: .32, type: 'sawtooth', gain: .09, slideTo: 90 }),
+  clear:      () => [0, 4, 7, 12].forEach((s, i) => tone(step(s), { dur: .5,  gain: .09, delay: i * .07 })),
+  over:       () => [12, 7, 3, 0].forEach((s, i) => tone(step(s), { dur: .45, gain: .08, delay: i * .12 })),
+  upgrade:    () => [0, 7, 12].forEach((s, i)     => tone(step(s + 7), { dur: .25, gain: .07, delay: i * .05 })),
+};
+
+// 브라우저는 사용자가 한 번 누르기 전까지 소리를 막는다. 첫 클릭에 풀어준다.
+document.addEventListener('pointerdown', () => { if (SOUND_ON) ac(); }, { once: true });
 
 
 // ── 언어 ───────────────────────────────────────
@@ -866,9 +931,11 @@ function toggleCard(index) {
   if (state.locked) return;
   if (state.selected.has(index)) {
     state.selected.delete(index);
+    sfx.deselect();
   } else {
     if (state.selected.size >= 5) return;   // 최대 5장
     state.selected.add(index);
+    sfx.select();
   }
   render();
 }
@@ -888,9 +955,14 @@ function removeSelected() {
 function play() {
   if (state.locked || state.selected.size === 0) return;
   const result = evaluate(selectedCards());
+  const prevCombo = state.combo;
 
   // 연쇄 갱신 → 점수에 곱한다
   state.combo = comboFor(result.chips);
+
+  // 쌓이면 계단으로 올라가는 소리, 끊기면 떨어지는 소리
+  if (prevCombo > 1 && state.combo === 1) sfx.chainBreak();
+  sfx.score(state.combo);
   state.maxCombo = Math.max(state.maxCombo, state.combo);
   state.lastChips = result.chips;
   state.lastName  = result.name;
@@ -922,6 +994,7 @@ function play() {
 function discard() {
   if (state.locked || state.selected.size === 0 || state.discardsLeft <= 0) return;
   state.discardsLeft--;
+  sfx.discard();
   removeSelected();
   render();
 }
@@ -1101,6 +1174,7 @@ function renderUpgrades(list) {
     el.innerHTML = `<span class="upgrade-name">${L(u.name)}</span>`
                  + `<span class="upgrade-desc">${L(u.desc)}</span>`;
     el.onclick = () => {
+      sfx.upgrade();
       u.apply(state);
       state.taken[u.id] = (state.taken[u.id] || 0) + 1;
       track('upgrade-' + u.id);
@@ -1114,6 +1188,7 @@ function renderUpgrades(list) {
 
 function stageClear() {
   track('stage-clear-' + state.stage);
+  sfx.clear();
   showOverlay(
     t('stage_clear', state.stage),
     state.stageScore.toLocaleString(),
@@ -1128,6 +1203,7 @@ function gameOver() {
   const isNewBest = state.totalScore > best;
   if (isNewBest) localStorage.setItem('best', state.totalScore);
 
+  sfx.over();
   track('gameover-stage-' + state.stage);
   track('maxcombo-' + state.maxCombo);
   track(playtimeBucket((Date.now() - state.startedAt) / 1000));
@@ -1235,6 +1311,19 @@ $('sort-rank').onclick   = () => setSort('rank');
 $('sort-suit').onclick   = () => setSort('suit');
 $('lang-en').onclick     = () => setLang('en');
 $('lang-ko').onclick     = () => setLang('ko');
+
+function setSound(on) {
+  SOUND_ON = on;
+  localStorage.setItem('sound', on ? 'on' : 'off');
+  $('sound-btn').textContent = on ? '🔊' : '🔇';
+  $('sound-btn').classList.toggle('active', on);
+  if (on) sfx.select();          // 켠 순간 들려줘야 켜진 걸 안다
+}
+$('sound-btn').onclick = () => setSound(!SOUND_ON);
+
+// 저장된 설정을 화면에 반영 (여기선 소리를 내지 않는다)
+$('sound-btn').textContent = SOUND_ON ? '🔊' : '🔇';
+$('sound-btn').classList.toggle('active', SOUND_ON);
 
 applyStaticText();
 newGame();
