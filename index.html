@@ -56,6 +56,14 @@
   .hud-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .hud-value.target { color: #ff8a5b; }
   .hud-value.score  { color: #5bc8ff; }
+  /* 이번 스테이지 점수 아래에 이번 판 누적을 작게 */
+  .hud-sub {
+    font-size: 10px;
+    color: #6f7688;
+    margin-top: 3px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
 
   /* 진행 바 */
   .progress {
@@ -218,7 +226,8 @@
   .btn-play    { background: #2f6bff; }
   .btn-discard { background: #3a3f4d; }
 
-  /* ── 보유 능력 / 족보표 ─────────────────── */
+  /* ── 랭킹 / 보유 능력 / 족보표 ───────────── */
+  #rank  { margin: 0 0 14px; }     /* 모드 버튼 바로 아래 */
   #owned { margin-top: 16px; }
   #owned + .guide { margin-top: 10px; }
   .owned-count { color: #ffd75b; }
@@ -420,6 +429,11 @@
     </div>
   </div>
 
+  <details class="guide" id="rank">
+    <summary id="rank-summary">Ranking</summary>
+    <div class="guide-list" id="rank-body"></div>
+  </details>
+
   <div class="hud">
     <div class="hud-cell">
       <div class="hud-label" data-i18n="hud_stage">Stage</div>
@@ -432,6 +446,7 @@
     <div class="hud-cell">
       <div class="hud-label" data-i18n="hud_score">Score</div>
       <div class="hud-value score" id="hud-score">0</div>
+      <div class="hud-sub" id="hud-total"></div>
     </div>
     <div class="hud-cell">
       <div class="hud-label" data-i18n="hud_left">Hands / Discards</div>
@@ -466,11 +481,6 @@
     <button class="btn-play" id="btn-play" data-i18n="btn_play" disabled>Play</button>
     <button class="btn-discard" id="btn-discard" data-i18n="btn_discard" disabled>Discard</button>
   </div>
-
-  <details class="guide" id="rank">
-    <summary id="rank-summary">Ranking</summary>
-    <div class="guide-list" id="rank-body"></div>
-  </details>
 
   <details class="guide hidden" id="owned">
     <summary id="owned-summary">Your upgrades</summary>
@@ -650,6 +660,7 @@ const I18N = {
     hud_target: 'Target',
     hud_score:  'Score',
     hud_left:   'Hands / Discards',
+    hud_total:  v => `run ${v}`,
 
     pick_cards:  'Pick your cards (up to 5)',
     chain_intro: 'Beat your last hand in chips to build a chain',
@@ -687,18 +698,18 @@ const I18N = {
 
     mode_daily:  'Daily',
     mode_free:   'Free',
-    start_daily:        n => `Play Daily #${n}`,
-    start_daily_resume: n => `Resume Daily #${n}`,
-    start_daily_done:   n => `Daily #${n} result`,
+    start_daily:        'Play Daily',
+    start_daily_resume: 'Resume Daily',
+    start_daily_done:   'Daily result',
     start_free:         'Free play',
     start_note_done:    "Today's daily is done — a new one tomorrow",
-    daily_done:  n => `Daily #${n} — already played`,
+    daily_done:  "Today's daily is done",
     to_free:     'Free play',
 
     col_stage:      'Stage',
     col_chain:      'Chain',
     col_score:      'Score',
-    board_daily:    n => `Daily #${n} ranking`,
+    board_daily:    'Daily ranking',
     board_free:     'Free play ranking',
     board_loading:  'Loading…',
     board_error:    'Ranking unavailable',
@@ -708,7 +719,7 @@ const I18N = {
     name_save:      'OK',
 
     share_title: '🃏 Chain — Card Roguelite',
-    share_daily: n => `Daily #${n}`,
+    share_daily: d => `Daily ${d}`,
     share_line1: (n, score) => `Ended at stage ${n} · ${score} pts`,
     share_line2: c => `Best chain ×${c}`,
   },
@@ -719,6 +730,7 @@ const I18N = {
     hud_target: '목표',
     hud_score:  '현재 점수',
     hud_left:   '핸드 / 버리기',
+    hud_total:  v => `누적 ${v}`,
 
     pick_cards:  '카드를 골라봐 (최대 5장)',
     chain_intro: '칩을 계속 높여서 내면 연쇄가 쌓인다',
@@ -756,18 +768,18 @@ const I18N = {
 
     mode_daily:  '데일리',
     mode_free:   '자유',
-    start_daily:        n => `데일리 #${n} 하기`,
-    start_daily_resume: n => `데일리 #${n} 이어하기`,
-    start_daily_done:   n => `데일리 #${n} 결과 보기`,
+    start_daily:        '데일리 하기',
+    start_daily_resume: '데일리 이어하기',
+    start_daily_done:   '데일리 결과 보기',
     start_free:         '자유 모드',
     start_note_done:    '오늘 데일리는 끝났어 — 내일 새 문제가 나와',
-    daily_done:  n => `데일리 #${n} — 오늘은 이미 했어`,
+    daily_done:  '오늘 데일리는 이미 했어',
     to_free:     '자유 모드로',
 
     col_stage:      '스테이지',
     col_chain:      '연쇄',
     col_score:      '점수',
-    board_daily:    n => `데일리 #${n} 순위`,
+    board_daily:    '데일리 순위',
     board_free:     '자유 모드 순위',
     board_loading:  '불러오는 중…',
     board_error:    '순위를 못 불러왔어',
@@ -777,7 +789,7 @@ const I18N = {
     name_save:      '등록',
 
     share_title: '🃏 연쇄 — 카드 로그라이트',
-    share_daily: n => `데일리 #${n}`,
+    share_daily: d => `데일리 ${d}`,
     share_line1: (n, score) => `스테이지 ${n}에서 종료 · ${score}점`,
     share_line2: c => `최고 연쇄 ×${c}`,
   },
@@ -828,6 +840,13 @@ const DAILY_EPOCH = new Date(2026, 7, 10).setHours(0, 0, 0, 0);   // 2026-08-10 
 function todayNumber() {
   const 오늘 = new Date().setHours(0, 0, 0, 0);
   return Math.floor((오늘 - DAILY_EPOCH) / 86400000) + 1;
+}
+
+// 공유 텍스트에 쓸 날짜. 회차 번호(#1)는 받는 사람에게 아무 의미가 없지만
+// 날짜는 "같은 날 같은 문제"라는 걸 바로 알려준다.
+function dailyDateLabel(n) {
+  const d = new Date(DAILY_EPOCH + (n - 1) * 86400000);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 // 같은 시드면 항상 같은 수열이 나온다 (mulberry32).
@@ -1468,6 +1487,7 @@ function render() {
   $('hud-stage').textContent  = state.stage;
   $('hud-target').textContent = target.toLocaleString();
   $('hud-score').textContent  = state.stageScore.toLocaleString();
+  $('hud-total').textContent  = t('hud_total', state.totalScore.toLocaleString());
   $('hud-left').textContent   = `${state.handsLeft} / ${state.discardsLeft}`;
   $('progress').style.width   = Math.min(100, state.stageScore / target * 100) + '%';
 
@@ -1509,7 +1529,7 @@ function render() {
   }
 
   $('rank').classList.toggle('hidden', !BOARD_URL);
-  $('rank-summary').textContent = DAILY_MODE ? t('board_daily', todayNumber()) : t('board_free');
+  $('rank-summary').textContent = DAILY_MODE ? t('board_daily') : t('board_free');
 
   renderOwned();
   renderGuide();
@@ -1717,7 +1737,7 @@ function shareText(r) {
                       daily: DAILY_MODE ? todayNumber() : 0 };
   const cleared = Math.max(0, 결과.stage - 1);
   const 줄 = [t('share_title')];
-  if (결과.daily) 줄.push(t('share_daily', 결과.daily));
+  if (결과.daily) 줄.push(t('share_daily', dailyDateLabel(결과.daily)));
   줄.push(
     t('share_line1', 결과.stage, Number(결과.score).toLocaleString()),
     t('share_line2', 결과.combo),
@@ -1796,7 +1816,7 @@ function boardTable(entries) {
 }
 
 function renderBoard(entries) {
-  $('board-head').textContent = DAILY_MODE ? t('board_daily', todayNumber()) : t('board_free');
+  $('board-head').textContent = DAILY_MODE ? t('board_daily') : t('board_free');
   $('board-list').innerHTML = boardTable(entries);
 }
 
@@ -1845,7 +1865,7 @@ function showBoard(r) {
   if (!BOARD_URL) return;
   boardResult = r;
   $('ov-board').classList.remove('hidden');
-  $('board-head').textContent = DAILY_MODE ? t('board_daily', todayNumber()) : t('board_free');
+  $('board-head').textContent = DAILY_MODE ? t('board_daily') : t('board_free');
 
   if (playerName()) {
     $('board-name').classList.add('hidden');
@@ -1927,13 +1947,12 @@ document.querySelectorAll('[data-lang]').forEach(b =>
 function showStart() {
   const 완료   = dailyResult();
   const 진행중 = !!localStorage.getItem(runKey());
-  const n = todayNumber();
 
   $('start-title').textContent = t('title');
   $('start-tag').textContent   = t('chain_intro');
-  $('start-daily').textContent = 완료   ? t('start_daily_done', n)
-                               : 진행중 ? t('start_daily_resume', n)
-                               :          t('start_daily', n);
+  $('start-daily').textContent = 완료   ? t('start_daily_done')
+                               : 진행중 ? t('start_daily_resume')
+                               :          t('start_daily');
   $('start-free').textContent  = t('start_free');
   $('start-note').textContent  = 완료 ? t('start_note_done') : '';
   $('start').classList.remove('hidden');
@@ -1951,7 +1970,7 @@ function showDailyDone(r) {
   DAILY_MODE = true;
   updateModeButtons();
   showOverlay(
-    t('daily_done', todayNumber()),
+    t('daily_done'),
     Number(r.score).toLocaleString(),
     t('ended_at', r.stage, bestScore().toLocaleString()),
     t('to_free'),
