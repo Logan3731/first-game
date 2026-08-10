@@ -540,8 +540,19 @@
 // (개인정보는 아무것도 안 보낸다. 아래 이름들만 나간다.)
 // 로컬에서 여는 경우(file://, localhost)는 집계하지 않는다.
 // 내 테스트 플레이가 섞이면 지표가 통째로 못 쓰게 된다.
+// ── 우리 사이트인가, 남의 포털인가 ────────────────
+// CrazyGames 같은 포털은 (1) 다른 곳의 플레이 가능한 버전으로 나가는 링크를
+// 금지하고, (2) 자기네 SDK 밖에서 개인정보를 수집하면 별도 고지를 요구한다.
+// 그래서 우리가 아는 곳에서만 외부 통신(분석·랭킹)과 링크를 켠다.
+// 모르는 곳에 올라가면 전부 꺼져서 아무것도 밖으로 나가지 않는다.
+const OWN_HOSTS = ['logan3731.github.io', 'localhost', '127.0.0.1'];
+const EXTERNAL_OK =
+  OWN_HOSTS.includes(location.hostname) || /(^|\.)itch\.(io|zone)$/i.test(location.hostname);
+
+// 포털에서는 분석도 끈다. 그쪽은 자체 통계를 준다.
 const ANALYTICS_ON = location.protocol.startsWith('http')
-                  && !['localhost', '127.0.0.1'].includes(location.hostname);
+                  && !['localhost', '127.0.0.1'].includes(location.hostname)
+                  && EXTERNAL_OK;
 
 function track(name) {
   if (!ANALYTICS_ON) return;
@@ -806,7 +817,7 @@ const L = o => o[LANG] || o.en;
 const SHARE_URL = 'https://logan3731.github.io/first-game/';
 
 // 랭킹 서버 (Cloudflare Worker). 비워두면 랭킹 기능이 통째로 꺼진다.
-const BOARD_URL = 'https://chain-leaderboard.xheuri123.workers.dev';
+const BOARD_URL = EXTERNAL_OK ? 'https://chain-leaderboard.xheuri123.workers.dev' : '';
 
 
 // ── 데일리 ─────────────────────────────────────
@@ -1711,8 +1722,9 @@ function shareText(r) {
     t('share_line1', 결과.stage, Number(결과.score).toLocaleString()),
     t('share_line2', 결과.combo),
     '🟩'.repeat(cleared) + '🟥',
-    SHARE_URL,
   );
+  // 포털에서는 주소를 뺀다. 다른 곳의 플레이 가능한 버전으로 나가는 링크는 금지다.
+  if (EXTERNAL_OK) 줄.push(SHARE_URL);
   return 줄.join('\n');
 }
 
