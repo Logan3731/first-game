@@ -619,7 +619,23 @@ const I18N = {
   },
 };
 
-let LANG = localStorage.getItem('lang') || 'en';
+// 직접 고른 언어가 있으면 그게 최우선. 없을 때만 브라우저 설정을 본다.
+// (안 그러면 한국인이 영어로 바꿔놔도 새로고침마다 한국어로 되돌아간다)
+function detectLang() {
+  const 고른것 = localStorage.getItem('lang');
+  if (고른것 && I18N[고른것]) return 고른것;
+
+  // 선호 순서를 존중한다. ['en-US','ko-KR']처럼 영어를 앞에 둔 사람은 영어를 원한다.
+  const 선호 = navigator.languages || [navigator.language || ''];
+  for (const l of 선호) {
+    const code = String(l).toLowerCase();
+    if (code.startsWith('ko')) return 'ko';
+    if (code.startsWith('en')) return 'en';
+  }
+  return 'en';
+}
+
+let LANG = detectLang();
 
 // 문자열 조회. 함수면 인자를 끼워서 문장을 만든다.
 function t(key, ...args) {
