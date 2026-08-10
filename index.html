@@ -507,6 +507,7 @@ const I18N = {
     pick_cards:  'Pick your cards (up to 5)',
     chain_intro: 'Beat your last hand in chips to build a chain',
     chain_first: "This hand's chips become the bar to beat",
+    chain_carry: combo => `Chain ×${combo} carried over — a new stage starts fresh, any hand keeps it`,
     chain_last:  (name, chips, combo) => `Last: ${name} ${chips} chips · Chain ×${combo} — next must beat ${chips}`,
     chain_hold:  (a, b, next) => `${a} > ${b} chips · Chain holds → ×${next}`,
     chain_max:   cap => `Chain maxed ×${cap}`,
@@ -551,6 +552,7 @@ const I18N = {
     pick_cards:  '카드를 골라봐 (최대 5장)',
     chain_intro: '칩을 계속 높여서 내면 연쇄가 쌓인다',
     chain_first: '이 핸드의 칩이 다음 연쇄의 기준이 돼',
+    chain_carry: combo => `연쇄 ×${combo} 유지 중 — 새 스테이지는 아무 패로나 이어갈 수 있어`,
     chain_last:  (name, chips, combo) => `직전 ${name} ${chips}칩 · 연쇄 ×${combo} — 다음은 ${chips}칩 초과`,
     chain_hold:  (a, b, next) => `${a}칩 > ${b}칩 · 연쇄 유지 → ×${next}`,
     chain_max:   cap => `연쇄 최대치 ×${cap}`,
@@ -851,6 +853,13 @@ function startStage() {
   state.stageScore = 0;
   state.handsLeft = state.handsMax;
   state.discardsLeft = state.discardsMax;
+
+  // 칩 기준은 스테이지마다 초기화한다. 연쇄 자체는 유지된다.
+  // 안 그러면 스테이지를 깨려고 지른 큰 패가 다음 스테이지 기준이 되어
+  // 첫 핸드에서 절반은 그냥 끊긴다 (측정: 넘길 확률 51%).
+  state.lastChips = 0;
+  state.lastName  = null;
+
   drawUp();
   render();
 }
@@ -1215,9 +1224,15 @@ function renderChain(preview) {
   const el = $('chain');
   el.className = 'chain';
 
-  // 아직 한 번도 안 낸 상태 — 여기서 규칙을 미리 알려준다
+  // 칩 기준이 비어 있는 상태 (판 시작 또는 새 스테이지)
   if (!state.lastName) {
-    el.textContent = preview ? t('chain_first') : t('chain_intro');
+    if (state.combo > 1) {
+      // 연쇄를 들고 새 스테이지에 왔다. 아무 패로나 이어갈 수 있다는 걸 알려준다.
+      el.classList.add('keep');
+      el.textContent = t('chain_carry', state.combo);
+    } else {
+      el.textContent = preview ? t('chain_first') : t('chain_intro');
+    }
     return;
   }
 
