@@ -144,7 +144,8 @@
   }
 
   /* ── 정렬 버튼 ─────────────────────────── */
-  .sort-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 12px; }
+  /* 선택한 카드가 16px 올라오므로 그보다 넉넉히 띄운다 (안 그러면 버튼을 가린다) */
+  .sort-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 24px; }
   .sort-btn {
     background: #1e2129;
     color: #6b7183;
