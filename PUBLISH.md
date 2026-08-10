@@ -1,6 +1,7 @@
 # 배포용 문구 모음
 
-복사해서 붙여넣기용. 게임은 한국어라 **한국 커뮤니티가 1순위**, itch.io는 병행.
+복사해서 붙여넣기용. **게임이 영어/한국어 둘 다 지원**하므로 itch.io와 한국 커뮤니티를
+동시에 노려도 된다. 기본 언어는 영어, 우상단 버튼으로 전환.
 
 ---
 
@@ -8,8 +9,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Title | 연쇄 — 카드 로그라이트 |
-| Short description | 칩을 계속 높여서 내면 연쇄가 쌓인다. 한 판 10분 카드 게임 |
+| Title | Chain — Card Roguelite |
+| Short description | Your chain only survives if every hand beats the last. ~10 min per run |
 | Classification | Game |
 | Kind of project | HTML |
 | Release status | Released |
@@ -17,11 +18,11 @@
 | Upload | `first-game-itch.zip` → **This file will be played in the browser** 체크 |
 | Embed | Manually set size: **760 × 1000**, Fullscreen 허용 |
 | Genre | Card Game |
-| Tags | `cards`, `roguelite`, `poker`, `singleplayer`, `html5`, `korean`, `score-attack` |
-| Language | Korean |
+| Tags | `cards`, `roguelite`, `poker`, `singleplayer`, `html5`, `score-attack`, `deckbuilding` |
+| Language | English, Korean (둘 다 선택) |
 
-> **Language를 Korean으로 꼭 지정할 것.** 영어권 유저가 들어왔다가 못 읽고 나가면
-> 조회수만 오르고 지표가 오염된다. 처음부터 걸러내는 게 낫다.
+> 프로젝트 **URL(주소)은 반드시 영문**으로. 제목에서 자동 생성되는 주소가
+> 한글이면 예약어와 충돌해서 저장이 안 된다. 예: `chain-card-roguelite`
 
 ---
 
@@ -84,18 +85,8 @@ That decision is the entire game.
 - Flush builds, low-hand builds, deck thinning — runs go in different directions
 - About 10 minutes per run, copy your result to share it
 - No install, works on mobile
+- English and Korean (switch in the top right)
 ```
-
-> **주의:** 영어 본문만 올리고 게임이 한국어면, 영어권 유저가 들어왔다가
-> 못 읽고 나간다. 게임 UI를 영어로도 지원한 뒤에 이 본문을 쓰는 게 맞다.
-> 그 전까지는 아래 문장을 본문 끝에 붙여서 미리 알려줄 것:
->
-> ```
-> ■ NOTE
->
-> The interface is currently Korean only. The game is mostly cards, suits and
-> numbers so it is playable if you know poker, but the text is not translated yet.
-> ```
 
 ---
 
