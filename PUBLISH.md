@@ -54,6 +54,51 @@
 
 ---
 
+## itch.io 본문 — 영어
+
+```
+A poker roguelite built on one twist: your chain only survives if every hand
+beats the last one.
+
+You don't need to know poker. Every hand type is listed on screen, and the ones
+you can currently make light up.
+
+■ THE RULE
+
+Score = Chips × Mult × Chain
+
+The first two are ordinary poker scoring. The third one is the game.
+
+Play a hand worth more chips than your previous hand and the chain goes up by
+one. Play a weaker one and it drops back to 1.
+
+So you can't dump your best hand whenever you feel like it. You have to climb —
+spend the small hands first and hold the big ones back, or your ladder collapses.
+
+"This clears the stage, but it breaks my chain and the next one gets much harder."
+That decision is the entire game.
+
+■ ALSO
+
+- Pick 1 of 3 upgrades after every stage (9 total)
+- Flush builds, low-hand builds, deck thinning — runs go in different directions
+- About 10 minutes per run, copy your result to share it
+- No install, works on mobile
+```
+
+> **주의:** 영어 본문만 올리고 게임이 한국어면, 영어권 유저가 들어왔다가
+> 못 읽고 나간다. 게임 UI를 영어로도 지원한 뒤에 이 본문을 쓰는 게 맞다.
+> 그 전까지는 아래 문장을 본문 끝에 붙여서 미리 알려줄 것:
+>
+> ```
+> ■ NOTE
+>
+> The interface is currently Korean only. The game is mostly cards, suits and
+> numbers so it is playable if you know poker, but the text is not translated yet.
+> ```
+
+---
+
 ## 커뮤니티용 짧은 소개
 
 **대상**: 아카라이브 게임 채널, 루리웹 게임포럼, DC 인디게임 갤러리, 개드립
