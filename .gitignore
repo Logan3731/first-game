@@ -4,3 +4,6 @@ first-game-itch.zip
 # wrangler 로컬 캐시 (계정 식별자가 들어있다)
 .wrangler/
 worker/.wrangler/
+
+# 원본 녹화본과 중간 산출물은 추적하지 않는다
+videos/*.mov
