@@ -10,13 +10,13 @@
 | 항목 | 값 |
 |---|---|
 | Title | Chain — Card Roguelite |
-| Short description | Your chain only survives if every hand beats the last. ~10 min per run |
+| Short description | Your chain only survives if every hand beats the last. New deck for everyone daily |
 | Classification | Game |
 | Kind of project | HTML |
 | Release status | Released |
 | Pricing | No payments (free) |
 | Upload | `first-game-itch.zip` → **This file will be played in the browser** 체크 |
-| Embed | Manually set size: **760 × 1000**, Fullscreen 허용 |
+| Embed | Manually set size: **620 × 1060** · Mobile friendly / 자동시작 / 전체화면 / 스크롤바 모두 켬 |
 | Genre | Card Game |
 | Tags | `cards`, `roguelite`, `poker`, `singleplayer`, `html5`, `score-attack`, `deckbuilding`, `daily` |
 | Language | English, Korean (둘 다 선택) |
@@ -52,10 +52,12 @@
 
 ■ 그 외
 
-- 스테이지를 깰 때마다 업그레이드 3개 중 1개 선택 (9종)
-- 플러시 특화, 낮은 족보 특화, 덱 압축 등 판마다 다른 빌드
-- 한 판 10분 내외, 결과를 복사해서 공유 가능
-- 설치 없음, 모바일에서도 됩니다
+- 스테이지를 깰 때마다 업그레이드 3개 중 1개 선택 (26종)
+- 절반은 대가가 있는 선택 — 핸드를 줄이는 대신 배수를 올리는 식
+- 연쇄 규칙 자체를 바꾸는 능력도 있습니다 (반토막 착지, 폭주 등)
+- 데일리: 같은 날엔 모두 같은 덱, 하루 한 판, 결과 공유
+- 한 판 15분 내외, 설치 없음, 모바일에서도 됩니다
+- 소리: 연쇄가 쌓일수록 음이 한 계단씩 올라갑니다
 ```
 
 ---
@@ -86,9 +88,9 @@ That decision is the entire game.
 
 ■ ALSO
 
-- Pick 1 of 3 upgrades after every stage (9 total)
+- Pick 1 of 3 upgrades after every stage (26 total, half of them with a real cost)
 - Flush builds, low-hand builds, deck thinning — runs go in different directions
-- About 10 minutes per run, copy your result to share it
+- About 15 minutes per run, copy your result to share it
 - No install, works on mobile
 - Daily run: everyone gets the same deck each day, one attempt, share your result
 - English and Korean (switch in the top right)
@@ -108,7 +110,8 @@ That decision is the entire game.
 직전 핸드보다 칩이 높아야 연쇄가 쌓이고, 낮으면 초기화됩니다.
 그래서 좋은 패를 아껴두고 낮은 것부터 올려야 하는 게 핵심입니다.
 
-한 판 10분쯤 걸리고, 포커 몰라도 족보표 보면서 할 수 있게 해놨습니다.
+한 판 15분쯤 걸리고, 포커 몰라도 족보표 보면서 할 수 있게 해놨습니다.
+매일 같은 덱으로 하는 데일리 모드도 있습니다.
 피드백 주시면 반영하겠습니다.
 
 https://logan3731.github.io/first-game/
