@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>카드 로그라이트 — 프로토타입</title>
+<title>Chain — Card Roguelite</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,6 +18,18 @@
   }
 
   #app { width: 100%; max-width: 720px; }
+
+  /* ── 언어 전환 ─────────────────────────── */
+  .lang-bar { display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 12px; }
+  .lang-btn {
+    background: transparent;
+    color: #565c6e;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 999px;
+  }
+  .lang-btn.active { background: #1e2129; color: #b6bcca; }
 
   /* ── 상단 정보 ─────────────────────────── */
   .hud {
@@ -302,21 +314,26 @@
 <body>
 
 <div id="app">
+  <div class="lang-bar">
+    <button class="lang-btn" id="lang-en">EN</button>
+    <button class="lang-btn" id="lang-ko">한국어</button>
+  </div>
+
   <div class="hud">
     <div class="hud-cell">
-      <div class="hud-label">스테이지</div>
+      <div class="hud-label" data-i18n="hud_stage">Stage</div>
       <div class="hud-value" id="hud-stage">1</div>
     </div>
     <div class="hud-cell">
-      <div class="hud-label">목표</div>
+      <div class="hud-label" data-i18n="hud_target">Target</div>
       <div class="hud-value target" id="hud-target">300</div>
     </div>
     <div class="hud-cell">
-      <div class="hud-label">현재 점수</div>
+      <div class="hud-label" data-i18n="hud_score">Score</div>
       <div class="hud-value score" id="hud-score">0</div>
     </div>
     <div class="hud-cell">
-      <div class="hud-label">핸드 / 버리기</div>
+      <div class="hud-label" data-i18n="hud_left">Hands / Discards</div>
       <div class="hud-value" id="hud-left">4 / 3</div>
     </div>
   </div>
@@ -324,33 +341,33 @@
   <div class="progress"><div class="progress-fill" id="progress"></div></div>
 
   <div class="stage-area">
-    <div class="hand-name" id="hand-name">카드를 골라봐 (최대 5장)</div>
+    <div class="hand-name" id="hand-name" data-i18n="pick_cards">Pick your cards (up to 5)</div>
     <div class="chain" id="chain"></div>
     <div class="formula">
-      <div class="term"><span class="chips" id="chips">0</span><span class="term-label">칩</span></div>
+      <div class="term"><span class="chips" id="chips">0</span><span class="term-label" data-i18n="lbl_chips">CHIPS</span></div>
       <span class="times">×</span>
-      <div class="term"><span class="mult" id="mult">0</span><span class="term-label">배수</span></div>
+      <div class="term"><span class="mult" id="mult">0</span><span class="term-label" data-i18n="lbl_mult">MULT</span></div>
       <span class="times">×</span>
-      <div class="term"><span class="combo idle" id="combo">1</span><span class="term-label">연쇄</span></div>
+      <div class="term"><span class="combo idle" id="combo">1</span><span class="term-label" data-i18n="lbl_chain">CHAIN</span></div>
     </div>
     <div class="result" id="result"></div>
     <div class="projection" id="projection"></div>
   </div>
 
   <div class="sort-bar">
-    <button class="sort-btn" id="sort-rank">숫자순</button>
-    <button class="sort-btn" id="sort-suit">무늬순</button>
+    <button class="sort-btn" id="sort-rank" data-i18n="sort_rank">By rank</button>
+    <button class="sort-btn" id="sort-suit" data-i18n="sort_suit">By suit</button>
   </div>
 
   <div class="hand" id="hand"></div>
 
   <div class="actions">
-    <button class="btn-play" id="btn-play" disabled>플레이</button>
-    <button class="btn-discard" id="btn-discard" disabled>버리기</button>
+    <button class="btn-play" id="btn-play" data-i18n="btn_play" disabled>Play</button>
+    <button class="btn-discard" id="btn-discard" data-i18n="btn_discard" disabled>Discard</button>
   </div>
 
   <details class="guide" id="guide" open>
-    <summary id="guide-summary">족보표</summary>
+    <summary id="guide-summary">Hand guide</summary>
     <div class="guide-list" id="guide-list"></div>
   </details>
 </div>
@@ -363,7 +380,7 @@
   <div class="upgrades hidden" id="ov-upgrades"></div>
   <div class="ov-actions">
     <button class="btn-play" id="ov-btn"></button>
-    <button class="btn-discard hidden" id="ov-share-btn">결과 복사</button>
+    <button class="btn-discard hidden" id="ov-share-btn" data-i18n="copy_result">Copy Result</button>
   </div>
 </div>
 
@@ -402,6 +419,111 @@ function playtimeBucket(sec) {
 }
 
 
+// ── 언어 ───────────────────────────────────────
+// 기본은 영어. 고른 언어는 기억한다.
+// 값이 함수인 항목은 숫자 등을 끼워 넣는 문장이다.
+const I18N = {
+  en: {
+    title:      'Chain — Card Roguelite',
+    hud_stage:  'Stage',
+    hud_target: 'Target',
+    hud_score:  'Score',
+    hud_left:   'Hands / Discards',
+
+    pick_cards:  'Pick your cards (up to 5)',
+    chain_intro: 'Beat your last hand in chips to build a chain',
+    chain_first: "This hand's chips become the bar to beat",
+    chain_last:  (name, chips, combo) => `Last: ${name} ${chips} chips · Chain ×${combo} — next must beat ${chips}`,
+    chain_hold:  (a, b, next) => `${a} > ${b} chips · Chain holds → ×${next}`,
+    chain_max:   cap => `Chain maxed ×${cap}`,
+    chain_break: (a, b, combo) => `${a} ≤ ${b} chips · Chain breaks (×${combo} → ×1)`,
+    chain_none:  (a, b) => `${a} ≤ ${b} chips · No chain`,
+
+    lbl_chips: 'CHIPS',
+    lbl_mult:  'MULT',
+    lbl_chain: 'CHAIN',
+    clear_mark: '  ·  CLEAR!',
+
+    btn_play:    'Play',
+    btn_discard: 'Discard',
+    sort_rank:   'By rank',
+    sort_suit:   'By suit',
+
+    guide:        'Hand guide',
+    guide_count:  n => `Hand guide · <span class="guide-count">${n} available now</span>`,
+
+    stage_clear: n => `Stage ${n} Clear`,
+    pick_one:    target => `Next target ${target} · pick one`,
+    game_over:   'Game Over',
+    new_best:    prev => `New best! (was ${prev})`,
+    ended_at:    (n, best) => `Ended at stage ${n} · best ${best}`,
+    play_again:  'Play Again',
+    copy_result: 'Copy Result',
+    copied:      'Copied!',
+    copy_manual: 'Copy the text above',
+
+    share_title: '🃏 Chain — Card Roguelite',
+    share_line1: (n, score) => `Ended at stage ${n} · ${score} pts`,
+    share_line2: c => `Best chain ×${c}`,
+  },
+
+  ko: {
+    title:      '연쇄 — 카드 로그라이트',
+    hud_stage:  '스테이지',
+    hud_target: '목표',
+    hud_score:  '현재 점수',
+    hud_left:   '핸드 / 버리기',
+
+    pick_cards:  '카드를 골라봐 (최대 5장)',
+    chain_intro: '칩을 계속 높여서 내면 연쇄가 쌓인다',
+    chain_first: '이 핸드의 칩이 다음 연쇄의 기준이 돼',
+    chain_last:  (name, chips, combo) => `직전 ${name} ${chips}칩 · 연쇄 ×${combo} — 다음은 ${chips}칩 초과`,
+    chain_hold:  (a, b, next) => `${a}칩 > ${b}칩 · 연쇄 유지 → ×${next}`,
+    chain_max:   cap => `연쇄 최대치 ×${cap}`,
+    chain_break: (a, b, combo) => `${a}칩 ≤ ${b}칩 · 연쇄 끊김 (×${combo} → ×1)`,
+    chain_none:  (a, b) => `${a}칩 ≤ ${b}칩 · 연쇄 안 붙음`,
+
+    lbl_chips: '칩',
+    lbl_mult:  '배수',
+    lbl_chain: '연쇄',
+    clear_mark: '  ·  클리어!',
+
+    btn_play:    '플레이',
+    btn_discard: '버리기',
+    sort_rank:   '숫자순',
+    sort_suit:   '무늬순',
+
+    guide:        '족보표',
+    guide_count:  n => `족보표 · <span class="guide-count">지금 만들 수 있는 것 ${n}개</span>`,
+
+    stage_clear: n => `스테이지 ${n} 클리어`,
+    pick_one:    target => `다음 목표 ${target}점 · 하나 골라`,
+    game_over:   '게임 오버',
+    new_best:    prev => `최고 기록 경신! (이전 ${prev}점)`,
+    ended_at:    (n, best) => `스테이지 ${n}에서 종료 · 최고 기록 ${best}점`,
+    play_again:  '다시 하기',
+    copy_result: '결과 복사',
+    copied:      '복사됐어!',
+    copy_manual: '위 내용을 직접 복사해줘',
+
+    share_title: '🃏 연쇄 — 카드 로그라이트',
+    share_line1: (n, score) => `스테이지 ${n}에서 종료 · ${score}점`,
+    share_line2: c => `최고 연쇄 ×${c}`,
+  },
+};
+
+let LANG = localStorage.getItem('lang') || 'en';
+
+// 문자열 조회. 함수면 인자를 끼워서 문장을 만든다.
+function t(key, ...args) {
+  const v = I18N[LANG][key] ?? I18N.en[key] ?? key;
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+// 데이터 표(족보·업그레이드)에 들어있는 { en, ko } 중 현재 언어를 고른다
+const L = o => o[LANG] || o.en;
+
+
 // 공유 링크에 넣을 정식 주소.
 // itch.io 등에 올리면 게임은 CDN 도메인의 iframe에서 도는데,
 // 그 주소를 그대로 공유하면 눌러도 제대로 안 열린다.
@@ -425,26 +547,45 @@ function addBonus(s, type, chips, mult) {
 }
 
 const UPGRADES = [
-  { id: 'hands',    name: '핸드 +1',    desc: '스테이지마다 한 번 더 낼 수 있다',
+  { id: 'hands',
+    name: { en: '+1 Hand',       ko: '핸드 +1' },
+    desc: { en: 'One more hand every stage', ko: '스테이지마다 한 번 더 낼 수 있다' },
     apply: s => s.handsMax += 1 },
-  { id: 'discards', name: '버리기 +2',  desc: '원하는 패를 더 오래 낚을 수 있다',
+  { id: 'discards',
+    name: { en: '+2 Discards',   ko: '버리기 +2' },
+    desc: { en: 'Fish longer for the hand you want', ko: '원하는 패를 더 오래 낚을 수 있다' },
     apply: s => s.discardsMax += 2 },
-  { id: 'handsize', name: '손패 +1장',  desc: '한 번에 보는 카드가 늘어난다',
+  { id: 'handsize',
+    name: { en: '+1 Card in Hand', ko: '손패 +1장' },
+    desc: { en: 'See more cards at once', ko: '한 번에 보는 카드가 늘어난다' },
     apply: s => s.handSize += 1 },
-  { id: 'combocap', name: '연쇄 상한 +3', desc: '사다리를 더 높이 쌓을 수 있다',
+  { id: 'combocap',
+    name: { en: '+3 Chain Cap',  ko: '연쇄 상한 +3' },
+    desc: { en: 'Climb the ladder higher', ko: '사다리를 더 높이 쌓을 수 있다' },
     apply: s => s.comboCap += 3 },
 
-  { id: 'lowhands', name: '원페어·투페어 배수 +2', desc: '낮은 패로 사다리를 시작하기 좋아진다',
+  { id: 'lowhands',
+    name: { en: 'Pair & Two Pair +2 Mult', ko: '원페어·투페어 배수 +2' },
+    desc: { en: 'Better at starting the ladder low', ko: '낮은 패로 사다리를 시작하기 좋아진다' },
     apply: s => { addBonus(s, 'pair', 0, 2); addBonus(s, 'twoPair', 0, 2); } },
-  { id: 'flush',    name: '플러시 배수 +3',        desc: '같은 무늬를 모으는 판이 된다',
+  { id: 'flush',
+    name: { en: 'Flush +3 Mult', ko: '플러시 배수 +3' },
+    desc: { en: 'Makes this a suit-collecting run', ko: '같은 무늬를 모으는 판이 된다' },
     apply: s => addBonus(s, 'flush', 0, 3) },
-  { id: 'straight', name: '스트레이트 배수 +3',    desc: '이어지는 숫자를 노리는 판이 된다',
+  { id: 'straight',
+    name: { en: 'Straight +3 Mult', ko: '스트레이트 배수 +3' },
+    desc: { en: 'Makes this a run-chasing run', ko: '이어지는 숫자를 노리는 판이 된다' },
     apply: s => addBonus(s, 'straight', 0, 3) },
-  { id: 'trips',    name: '트리플·포카드 배수 +2', desc: '같은 숫자를 모으는 판이 된다',
+  { id: 'trips',
+    name: { en: 'Trips & Quads +2 Mult', ko: '트리플·포카드 배수 +2' },
+    desc: { en: 'Makes this a number-collecting run', ko: '같은 숫자를 모으는 판이 된다' },
     apply: s => { addBonus(s, 'threeKind', 0, 2); addBonus(s, 'fourKind', 0, 2); } },
 
   // 칩은 올라가지만 사다리의 낮은 칸이 사라진다. 공짜가 아니다.
-  { id: 'strip',    name: '덱에서 2·3·4 제거', desc: '패가 전반적으로 세지지만 연쇄를 낮게 시작할 수 없다',
+  { id: 'strip',
+    name: { en: 'Remove 2·3·4 from deck', ko: '덱에서 2·3·4 제거' },
+    desc: { en: "Hands get stronger, but you can't start the chain low",
+            ko: '패가 전반적으로 세지지만 연쇄를 낮게 시작할 수 없다' },
     max: 1, apply: s => [2, 3, 4].forEach(r => s.removedRanks.add(r)) },
 ];
 
@@ -452,15 +593,33 @@ const UPGRADES = [
 // desc는 포커를 모르는 사람이 목록만 보고 알 수 있게 적는다.
 // 이 게임의 최대 진입 장벽이 "족보를 모른다"였다.
 const HAND_TYPES = {
-  straightFlush: { name: '스트레이트 플러시', desc: '같은 무늬로 이어지는 5장', chips: 100, mult: 8 },
-  fourKind:      { name: '포카드',            desc: '같은 숫자 4장',            chips:  60, mult: 7 },
-  fullHouse:     { name: '풀하우스',          desc: '같은 숫자 3장 + 2장',      chips:  40, mult: 4 },
-  flush:         { name: '플러시',            desc: '같은 무늬 5장',            chips:  35, mult: 4 },
-  straight:      { name: '스트레이트',        desc: '숫자가 이어지는 5장',      chips:  30, mult: 4 },
-  threeKind:     { name: '트리플',            desc: '같은 숫자 3장',            chips:  30, mult: 3 },
-  twoPair:       { name: '투페어',            desc: '같은 숫자 2장씩 두 쌍',    chips:  20, mult: 2 },
-  pair:          { name: '원페어',            desc: '같은 숫자 2장',            chips:  10, mult: 2 },
-  highCard:      { name: '하이카드',          desc: '아무것도 안 맞을 때',      chips:   5, mult: 1 },
+  straightFlush: { chips: 100, mult: 8,
+    name: { en: 'Straight Flush',  ko: '스트레이트 플러시' },
+    desc: { en: '5 in a row, same suit', ko: '같은 무늬로 이어지는 5장' } },
+  fourKind: { chips: 60, mult: 7,
+    name: { en: 'Four of a Kind',  ko: '포카드' },
+    desc: { en: '4 of the same number', ko: '같은 숫자 4장' } },
+  fullHouse: { chips: 40, mult: 4,
+    name: { en: 'Full House',      ko: '풀하우스' },
+    desc: { en: '3 of a kind plus a pair', ko: '같은 숫자 3장 + 2장' } },
+  flush: { chips: 35, mult: 4,
+    name: { en: 'Flush',           ko: '플러시' },
+    desc: { en: '5 cards of the same suit', ko: '같은 무늬 5장' } },
+  straight: { chips: 30, mult: 4,
+    name: { en: 'Straight',        ko: '스트레이트' },
+    desc: { en: '5 numbers in a row', ko: '숫자가 이어지는 5장' } },
+  threeKind: { chips: 30, mult: 3,
+    name: { en: 'Three of a Kind', ko: '트리플' },
+    desc: { en: '3 of the same number', ko: '같은 숫자 3장' } },
+  twoPair: { chips: 20, mult: 2,
+    name: { en: 'Two Pair',        ko: '투페어' },
+    desc: { en: 'Two separate pairs', ko: '같은 숫자 2장씩 두 쌍' } },
+  pair: { chips: 10, mult: 2,
+    name: { en: 'Pair',            ko: '원페어' },
+    desc: { en: '2 of the same number', ko: '같은 숫자 2장' } },
+  highCard: { chips: 5, mult: 1,
+    name: { en: 'High Card',       ko: '하이카드' },
+    desc: { en: 'Nothing matches',  ko: '아무것도 안 맞을 때' } },
 };
 
 // 족보표에 보여줄 순서. 쉬운 것부터 올라가는 사다리로 읽히게 한다.
@@ -631,7 +790,7 @@ function evaluate(cards) {
   const b     = statsFor(type);
   const chips = b.chips + scoring.reduce((sum, c) => sum + chipsOf(c.rank), 0);
 
-  return { type, name: def.name, chips, mult: b.mult, score: chips * b.mult };
+  return { type, name: L(def.name), chips, mult: b.mult, score: chips * b.mult };
 }
 
 
@@ -675,17 +834,15 @@ function availableTypes() {
 
 function renderGuide() {
   const can = availableTypes();
-  $('guide-summary').innerHTML = can.size
-    ? `족보표 · 지금 만들 수 있는 것 <span class="guide-count">${can.size}개</span>`
-    : '족보표';
+  $('guide-summary').innerHTML = can.size ? t('guide_count', can.size) : t('guide');
 
   $('guide-list').innerHTML = GUIDE_ORDER.map(key => {
-    const t = HAND_TYPES[key];
-    const s = statsFor(key);                       // 업그레이드가 반영된 실제 수치
-    const up = s.mult > t.mult || s.chips > t.chips;
+    const def = HAND_TYPES[key];
+    const s   = statsFor(key);                     // 업그레이드가 반영된 실제 수치
+    const up  = s.mult > def.mult || s.chips > def.chips;
     return `<div class="guide-row${can.has(key) ? ' can' : ''}">`
-         +   `<span><span class="guide-name">${t.name}</span>`
-         +   `<span class="guide-desc">${t.desc}</span></span>`
+         +   `<span><span class="guide-name">${L(def.name)}</span>`
+         +   `<span class="guide-desc">${L(def.desc)}</span></span>`
          +   `<span class="guide-score${up ? ' buffed' : ''}">${s.chips} × ${s.mult}</span>`
          + '</div>';
   }).join('');
@@ -809,7 +966,7 @@ function render() {
       $('mult').textContent  = preview.mult;
       setCombo(comboFor(preview.chips), false);
     } else {
-      $('hand-name').textContent = '카드를 골라봐 (최대 5장)';
+      $('hand-name').textContent = t('pick_cards');
       $('hand-name').classList.remove('active');
       $('chips').textContent = '0';
       $('mult').textContent  = '0';
@@ -851,27 +1008,25 @@ function renderChain(preview) {
 
   // 아직 한 번도 안 낸 상태 — 여기서 규칙을 미리 알려준다
   if (!state.lastName) {
-    el.textContent = preview
-      ? '이 핸드의 칩이 다음 연쇄의 기준이 돼'
-      : '칩을 계속 높여서 내면 연쇄가 쌓인다';
+    el.textContent = preview ? t('chain_first') : t('chain_intro');
     return;
   }
 
   const need = state.lastChips;   // 이 칩을 넘겨야 이어진다
 
   if (!preview) {
-    el.textContent = `직전 ${state.lastName} ${need}칩 · 연쇄 ×${state.combo} — 다음은 ${need}칩 초과`;
+    el.textContent = t('chain_last', state.lastName, need, state.combo);
   } else if (preview.chips > need) {
     const next = comboFor(preview.chips);
     el.classList.add('keep');
     el.textContent = next >= state.comboCap
-      ? `연쇄 최대치 ×${state.comboCap}`
-      : `${preview.chips}칩 > ${need}칩 · 연쇄 유지 → ×${next}`;
+      ? t('chain_max', state.comboCap)
+      : t('chain_hold', preview.chips, need, next);
   } else {
     el.classList.add('break');
     el.textContent = state.combo > 1
-      ? `${preview.chips}칩 ≤ ${need}칩 · 연쇄 끊김 (×${state.combo} → ×1)`
-      : `${preview.chips}칩 ≤ ${need}칩 · 연쇄 안 붙음`;
+      ? t('chain_break', preview.chips, need, state.combo)
+      : t('chain_none', preview.chips, need);
   }
 }
 
@@ -899,7 +1054,7 @@ function renderProjection(preview) {
 
   prj.className = 'projection' + (클리어 ? ' clear' : '');
   prj.textContent = `${after.toLocaleString()} / ${target.toLocaleString()}`
-                  + (클리어 ? '  ·  클리어!' : '');
+                  + (클리어 ? t('clear_mark') : '');
 }
 
 // 점수가 터지는 연출
@@ -943,8 +1098,8 @@ function renderUpgrades(list) {
   for (const u of list) {
     const el = document.createElement('button');
     el.className = 'upgrade';
-    el.innerHTML = `<span class="upgrade-name">${u.name}</span>`
-                 + `<span class="upgrade-desc">${u.desc}</span>`;
+    el.innerHTML = `<span class="upgrade-name">${L(u.name)}</span>`
+                 + `<span class="upgrade-desc">${L(u.desc)}</span>`;
     el.onclick = () => {
       u.apply(state);
       state.taken[u.id] = (state.taken[u.id] || 0) + 1;
@@ -960,9 +1115,9 @@ function renderUpgrades(list) {
 function stageClear() {
   track('stage-clear-' + state.stage);
   showOverlay(
-    `스테이지 ${state.stage} 클리어`,
+    t('stage_clear', state.stage),
     state.stageScore.toLocaleString(),
-    `다음 목표 ${targetFor(state.stage + 1).toLocaleString()}점 · 하나 골라`,
+    t('pick_one', targetFor(state.stage + 1).toLocaleString()),
     null, null, false,
     pickUpgrades(3)
   );
@@ -978,12 +1133,12 @@ function gameOver() {
   track(playtimeBucket((Date.now() - state.startedAt) / 1000));
 
   showOverlay(
-    '게임 오버',
+    t('game_over'),
     state.totalScore.toLocaleString(),
     isNewBest
-      ? `최고 기록 경신! (이전 ${best.toLocaleString()}점)`
-      : `스테이지 ${state.stage}에서 종료 · 최고 기록 ${best.toLocaleString()}점`,
-    '다시 하기',
+      ? t('new_best', best.toLocaleString())
+      : t('ended_at', state.stage, best.toLocaleString()),
+    t('play_again'),
     newGame,
     true          // 게임오버에서만 공유 UI를 띄운다
   );
@@ -993,9 +1148,9 @@ function gameOver() {
 function shareText() {
   const cleared = Math.max(0, state.stage - 1);
   return [
-    '🃏 카드 로그라이트',
-    `스테이지 ${state.stage}에서 종료 · ${state.totalScore.toLocaleString()}점`,
-    `최고 연쇄 ×${state.maxCombo}`,
+    t('share_title'),
+    t('share_line1', state.stage, state.totalScore.toLocaleString()),
+    t('share_line2', state.maxCombo),
     '🟩'.repeat(cleared) + '🟥',
     SHARE_URL,
   ].join('\n');
@@ -1022,8 +1177,8 @@ async function copyShare() {
   }
 
   if (ok) track('share-copy');
-  btn.textContent = ok ? '복사됐어!' : '위 내용을 직접 복사해줘';
-  setTimeout(() => { btn.textContent = '결과 복사'; }, 1800);
+  btn.textContent = ok ? t('copied') : t('copy_manual');
+  setTimeout(() => { btn.textContent = t('copy_result'); }, 1800);
 }
 
 function showOverlay(title, score, desc, btnText, onClick, share, upgrades) {
@@ -1046,7 +1201,7 @@ function showOverlay(title, score, desc, btnText, onClick, share, upgrades) {
   $('ov-share-btn').classList.toggle('hidden', !share);
   if (share) {
     $('ov-share').textContent     = shareText();
-    $('ov-share-btn').textContent = '결과 복사';
+    $('ov-share-btn').textContent = t('copy_result');
     $('ov-share-btn').onclick     = copyShare;
   }
 
@@ -1056,10 +1211,32 @@ function showOverlay(title, score, desc, btnText, onClick, share, upgrades) {
 
 // ══════════════════════════════════════════════
 
+// data-i18n이 붙은 정적 요소를 현재 언어로 갈아끼운다
+function applyStaticText() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.title = t('title');
+  document.documentElement.lang = LANG;
+  $('lang-en').classList.toggle('active', LANG === 'en');
+  $('lang-ko').classList.toggle('active', LANG === 'ko');
+}
+
+function setLang(lang) {
+  LANG = lang;
+  localStorage.setItem('lang', lang);
+  applyStaticText();
+  render();                       // 족보표·안내문 등 동적 문자열까지 다시 그린다
+}
+
 $('btn-play').onclick    = play;
 $('btn-discard').onclick = discard;
 $('sort-rank').onclick   = () => setSort('rank');
 $('sort-suit').onclick   = () => setSort('suit');
+$('lang-en').onclick     = () => setLang('en');
+$('lang-ko').onclick     = () => setLang('ko');
+
+applyStaticText();
 newGame();
 </script>
 
