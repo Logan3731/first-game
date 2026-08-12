@@ -206,6 +206,13 @@
     box-shadow: 0 6px 20px rgba(255,215,91,.25);
   }
   .card.red { color: #d8354a; }
+
+  /* 첫 수 유도 — 카드를 누를 수 있다는 걸 알려주는 신호 */
+  .card.hint { animation: hintPulse 1.5s ease-in-out infinite; }
+  @keyframes hintPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 91, 0); transform: translateY(0); }
+    50%      { box-shadow: 0 0 0 4px rgba(255, 215, 91, .45); transform: translateY(-5px); }
+  }
   .card-rank { font-size: 24px; font-weight: 800; line-height: 1; }
   .card-suit { font-size: 20px; line-height: 1; }
 
@@ -674,6 +681,8 @@ const I18N = {
 
     pick_cards:  'Pick your cards (up to 5)',
     chain_intro: 'Beat your last hand in chips to build a chain',
+    teach_pick:  'Tap the glowing cards to pick them',
+    teach_play:  'Now press Play to score them',
     chain_first: "This hand's chips become the bar to beat",
     chain_carry: combo => `Chain ×${combo} carried over — a new stage starts fresh, any hand keeps it`,
     chain_last:  (name, chips, combo) => `Last: ${name} ${chips} chips · Chain ×${combo} — next must beat ${chips}`,
@@ -744,6 +753,8 @@ const I18N = {
 
     pick_cards:  '카드를 골라봐 (최대 5장)',
     chain_intro: '칩을 계속 높여서 내면 연쇄가 쌓인다',
+    teach_pick:  '반짝이는 카드를 눌러서 골라봐',
+    teach_play:  '이제 플레이를 누르면 점수가 돼',
     chain_first: '이 핸드의 칩이 다음 연쇄의 기준이 돼',
     chain_carry: combo => `연쇄 ×${combo} 유지 중 — 새 스테이지는 아무 패로나 이어갈 수 있어`,
     chain_last:  (name, chips, combo) => `직전 ${name} ${chips}칩 · 연쇄 ×${combo} — 다음은 ${chips}칩 초과`,
@@ -1384,6 +1395,39 @@ function renderGuide() {
 }
 
 
+// ══════════════════════════════════════════════
+//  첫 수 유도
+//  처음 온 사람은 카드를 누를 수 있다는 것 자체를 모른다 (특히 폰).
+//  첫 판 첫 핸드에만 나오고, 한 번 내고 나면 다시는 안 나온다.
+// ══════════════════════════════════════════════
+
+const 배운적있나 = () => localStorage.getItem('taught') === '1';
+
+// 유도 중인가 — 아직 안 배웠고, 1스테이지 첫 핸드이고, 연출 중이 아닐 때
+function teaching() {
+  return !배운적있나() && state.stage === 1
+      && state.handsLeft === state.handsMax && !state.locked;
+}
+
+// 가리킬 카드를 고른다. 가장 센 조합이 아니라 "칩이 가장 낮은 조합"을 고른다.
+// 연쇄를 낮게 시작하는 게 올바른 첫 수라, 조작과 함께 좋은 습관도 같이 알려준다.
+function teachPick() {
+  const n = state.hand.length;
+  let best = null;
+  for (let m = 1; m < (1 << n); m++) {
+    const idx = [];
+    for (let i = 0; i < n; i++) if (m & (1 << i)) idx.push(i);
+    if (idx.length > 5) continue;
+    const ev = evaluate(idx.map(i => state.hand[i]));
+    if (!ev) continue;
+    // 하이카드 한 장보다는 짝이 맞는 조합을 우선해서 보여준다
+    const 급 = ev.type === 'highCard' ? 1 : 0;
+    const 점 = 급 * 1000 + ev.chips;
+    if (!best || 점 < best.점) best = { 점, idx };
+  }
+  return best ? best.idx : [];
+}
+
 // 이 핸드를 지금 내면 연쇄가 몇 배가 되는가.
 // 직전 핸드보다 칩이 높아야 이어진다. 족보 종류는 상관없다.
 // → 같은 족보를 반복하는 것만으로는 오래 못 가고,
@@ -1435,6 +1479,7 @@ function removeSelected() {
 
 function play() {
   if (state.locked || state.selected.size === 0) return;
+  localStorage.setItem('taught', '1');   // 한 번 내봤으면 유도는 끝
   const result = evaluate(selectedCards());
   const prevCombo = state.combo;
 
@@ -1502,12 +1547,17 @@ function render() {
   $('progress').style.width   = Math.min(100, state.stageScore / target * 100) + '%';
 
   // 손패
+  // 첫 수 유도: 아직 아무것도 안 골랐을 때만 가리킨다. 하나라도 고르면 사라진다.
+  const 유도중 = teaching();
+  const 가리킬카드 = (유도중 && state.selected.size === 0) ? new Set(teachPick()) : null;
+
   const handEl = $('hand');
   handEl.innerHTML = '';
   state.hand.forEach((card, i) => {
     const el = document.createElement('div');
     el.className = 'card'
       + (state.selected.has(i) ? ' selected' : '')
+      + (가리킬카드 && 가리킬카드.has(i) ? ' hint' : '')
       + (card.suit === 1 || card.suit === 2 ? ' red' : '');
     el.innerHTML = `<div class="card-rank">${RANK_NAMES[card.rank]}</div>`
                  + `<div class="card-suit">${SUITS[card.suit]}</div>`;
@@ -1571,6 +1621,13 @@ function setCombo(value, bump) {
 function renderChain(preview) {
   const el = $('chain');
   el.className = 'chain';
+
+  // 첫 수 유도가 다른 안내보다 우선한다. 규칙 설명은 조작을 안 뒤에 읽어도 늦지 않다.
+  if (teaching()) {
+    el.classList.add('keep');
+    el.textContent = state.selected.size === 0 ? t('teach_pick') : t('teach_play');
+    return;
+  }
 
   // 칩 기준이 비어 있는 상태 (판 시작 또는 새 스테이지)
   if (!state.lastName) {
