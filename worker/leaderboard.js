@@ -23,6 +23,22 @@ const json = (data, status = 200) =>
 const TOP_N = 50;
 const boardKey = (mode, day) => (mode === 'daily' ? `board:daily:${day}` : 'board:free');
 
+// ── 앞뒤가 맞는 기록인가 ──
+// 점수는 브라우저가 보내므로 위조를 완전히 막을 수는 없다.
+// 대신 "게임 규칙상 불가능한 조합"은 걸러낸다.
+
+// 스테이지 N에서 끝났다면 1~N-1 스테이지의 목표를 전부 넘겼어야 한다.
+// 그 합계가 최소 점수다. (게임의 targetFor와 같은 식)
+function minScoreFor(stage) {
+  let sum = 0;
+  for (let n = 1; n < stage; n++) sum += Math.floor(300 * Math.pow(1.6, n - 1) / 10) * 10;
+  return sum;
+}
+
+// 연쇄 상한은 10에서 시작하고 업그레이드로 3씩 오른다.
+// 업그레이드는 스테이지를 깰 때마다 하나뿐이므로 이보다 높을 수 없다.
+const maxComboFor = stage => 10 + 3 * Math.max(0, stage - 1);
+
 // 한 사람당 최고 기록 하나만 남긴다.
 // 안 그러면 많이 한 사람 이름으로 순위표가 도배된다.
 function bestPerName(list) {
@@ -69,6 +85,11 @@ export default {
       if (!Number.isFinite(score) || score < 0 || score > 100000000) return json({ error: 'bad score' }, 400);
       if (!Number.isFinite(stage) || stage < 1 || stage > 200)       return json({ error: 'bad stage' }, 400);
       if (!Number.isFinite(combo) || combo < 0 || combo > 500)       return json({ error: 'bad combo' }, 400);
+
+      // 게임 규칙상 불가능한 조합을 거른다.
+      // (실제로 'stage 77 / combo 77 / score 777891' 같은 장난 기록이 올라왔다)
+      if (score < minScoreFor(stage))   return json({ error: 'score too low for stage' }, 400);
+      if (combo > maxComboFor(stage))   return json({ error: 'combo too high for stage' }, 400);
 
       const key  = boardKey(mode, day);
       const raw  = await env.SCORES.get(key);
