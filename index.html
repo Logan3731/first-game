@@ -382,6 +382,9 @@
   .board-table tr.me td:first-child { border-radius: 6px 0 0 6px; }
   .board-table tr.me td:last-child  { border-radius: 0 6px 6px 0; }
 
+  /* 10등 밖의 내 기록을 붙일 때 쓰는 구분 줄 */
+  .board-gap td { color: #3d4350; padding: 2px 0; letter-spacing: .2em; }
+
   .board-rank { color: #565c6e; width: 24px; }
   .board-table tr.me .board-rank { color: #ffd75b; font-weight: 700; }
   .board-name-cell { width: 99%; }          /* 남는 폭을 이름이 가져간다 */
@@ -1899,19 +1902,31 @@ function boardMessage(msg) {
   $('board-list').innerHTML = boardMsg(msg);
 }
 
+// 순위표에 몇 줄까지 보여줄지. 이보다 아래면 내 줄만 따로 붙는다.
+const TOP_SHOWN = 10;
+
 // 순위표를 표로 그린다. 오버레이와 게임 중 패널이 같은 함수를 쓴다.
 function boardTable(entries) {
   if (!entries || !entries.length) return boardMsg(t('board_empty'));
 
   const 나 = playerName();
-  const 행 = entries.slice(0, 10).map((e, i) =>
+  const 줄 = (e, i) =>
     `<tr class="${나 && e.name === 나 ? 'me' : ''}">`
     + `<td class="board-rank">${i + 1}</td>`
     + `<td class="board-name-cell">${escapeHtml(e.name)}</td>`
     + `<td>${Number(e.stage) || '-'}</td>`
     + `<td class="board-chain">×${Number(e.combo) || 0}</td>`
     + `<td>${Number(e.score).toLocaleString()}</td>`
-    + '</tr>').join('');
+    + '</tr>';
+
+  let 행 = entries.slice(0, TOP_SHOWN).map(줄).join('');
+
+  // 10등 밖이면 내 줄을 아래에 따로 붙인다.
+  // 기록을 냈는데 순위표 어디에도 안 보이면 안 올라간 걸로 오해한다.
+  const 내자리 = 나 ? entries.findIndex(e => e.name === 나) : -1;
+  if (내자리 >= TOP_SHOWN) {
+    행 += '<tr class="board-gap"><td colspan="5">⋯</td></tr>' + 줄(entries[내자리], 내자리);
+  }
 
   return '<table class="board-table"><thead><tr>'
        + `<th></th><th></th><th>${t('col_stage')}</th>`
