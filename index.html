@@ -406,6 +406,23 @@
   .board-name button { padding: 9px 16px; font-size: 14px; }
 
   .ov-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  /* 인스타 링크 — 점수를 내고 기분 좋을 때가 팔로우할 확률이 제일 높다.
+     포털에서는 밖으로 나가는 링크가 금지라 EXTERNAL_OK일 때만 보인다. */
+  .ig {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border: 1px solid #2f3542;
+    border-radius: 999px;
+    color: #8b91a3;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .ig:hover { background: #1e222b; border-color: #444d61; color: #b6bcca; }
+  .ig-mark { color: #ff5b7b; font-size: 14px; }
   .overlay .big {
     font-size: 44px;
     font-weight: 800;
@@ -555,6 +572,9 @@
     <button class="btn-play" id="ov-btn"></button>
     <button class="btn-discard hidden" id="ov-share-btn" data-i18n="copy_result">Copy Result</button>
   </div>
+
+  <a class="ig hidden" id="ov-ig" href="https://www.instagram.com/logan__3731/"
+     target="_blank" rel="noopener"></a>
 </div>
 
 <script>
@@ -724,6 +744,7 @@ const I18N = {
     start_note_done:    "Today's daily is done — a new one tomorrow",
     daily_done:  "Today's daily is done",
     to_free:     'Free play',
+    follow_me:   'New games @logan__3731',
 
     col_stage:      'Stage',
     col_chain:      'Chain',
@@ -796,6 +817,7 @@ const I18N = {
     start_note_done:    '오늘 데일리는 끝났어 — 내일 새 문제가 나와',
     daily_done:  '오늘 데일리는 이미 했어',
     to_free:     '자유 모드로',
+    follow_me:   '새 게임 소식 @logan__3731',
 
     col_stage:      '스테이지',
     col_chain:      '연쇄',
@@ -1963,6 +1985,10 @@ function showOverlay(title, score, desc, btnText, onClick, share, upgrades, shar
   // 공유는 판이 끝났을 때만. 스테이지 중간엔 아직 자랑할 게 아니다.
   $('ov-share').classList.toggle('hidden', !share);
   $('ov-share-btn').classList.toggle('hidden', !share);
+
+  // 인스타는 판이 끝났고, 밖으로 나가도 되는 곳에서만
+  $('ov-ig').classList.toggle('hidden', !(share && EXTERNAL_OK));
+  $('ov-ig').innerHTML = `<span class="ig-mark">◎</span> ${escapeHtml(t('follow_me'))}`;
   if (share) {
     $('ov-share').textContent     = shareText(pendingShare);
     $('ov-share-btn').textContent = t('copy_result');
