@@ -754,6 +754,7 @@ const I18N = {
     board_loading:  'Loading…',
     board_error:    'Ranking unavailable',
     board_empty:    'No scores yet — be the first',
+    board_taken:    'That name is already on the board — pick another',
     board_ask_name: 'Enter a name to join the ranking',
     name_hint:      'name',
     name_save:      'OK',
@@ -827,6 +828,7 @@ const I18N = {
     board_loading:  '불러오는 중…',
     board_error:    '순위를 못 불러왔어',
     board_empty:    '아직 아무도 없어 — 1등 해봐',
+    board_taken:    '그 이름은 이미 순위표에 있어 — 다른 이름으로 해줘',
     board_ask_name: '이름을 넣으면 순위에 올라가',
     name_hint:      '이름',
     name_save:      '등록',
@@ -1872,6 +1874,19 @@ async function copyShare() {
 const playerName = () => localStorage.getItem('name') || '';
 let boardResult = null;     // 지금 등록하려는 결과
 
+// 이 브라우저만 아는 비밀값. 순위표에 올린 이름을 남이 못 쓰게 하는 열쇠다.
+// 서버는 이 값의 해시만 갖고 있고, 같은 이름에 다른 열쇠가 오면 거절한다.
+// 지우면 그 이름을 다시 못 쓴다 — 순위표에서 밀려날 때까지.
+function playerKey() {
+  let k = localStorage.getItem('boardKey');
+  if (!k) {
+    k = [...crypto.getRandomValues(new Uint8Array(16))]
+          .map(b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('boardKey', k);
+  }
+  return k;
+}
+
 // 이름은 다른 사람이 보낸 값이라 그대로 넣으면 안 된다
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
@@ -1938,6 +1953,7 @@ async function submitScore(r) {
         mode:  r.daily ? 'daily' : 'free',
         day:   r.daily || 0,
         name,  score: r.score, stage: r.stage, combo: r.combo,
+        key:   playerKey(),
       }),
     });
     const data = await res.json();
@@ -1945,7 +1961,8 @@ async function submitScore(r) {
     renderBoard(data.entries);
     track('board-submit');
   } catch (e) {
-    boardMessage(t('board_error'));
+    // 남이 먼저 쓴 이름이면 왜 안 되는지 알려줘야 한다
+    boardMessage(t(String(e.message) === 'name taken' ? 'board_taken' : 'board_error'));
   }
 }
 

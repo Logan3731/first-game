@@ -17,3 +17,14 @@ compatibility_date = "2026-08-10"
 [[kv_namespaces]]
 binding = "SCORES"
 id = "67d954a3361d46fcadeaa48a1c2572d9"
+
+# 순위표 본체. 순위표 하나당 인스턴스 하나라 요청이 한 줄로 선다.
+# KV만 쓰면 동시에 들어온 점수가 서로를 덮어써서 사라진다.
+# 도배 횟수도 여기서 센다 (ratelimits 바인딩은 실제로 안 막혔다 — 12연속 통과).
+[[durable_objects.bindings]]
+name = "BOARD"
+class_name = "Board"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Board"]
