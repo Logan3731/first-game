@@ -2196,6 +2196,24 @@ function renderBoard(entries) {
   $('board-list').innerHTML = boardTable(entries);
 }
 
+// 순위표는 식어 있으면 첫 호출이 실패한다. 서버도 재시도하지만
+// 그래도 놓치는 게 있어서 여기서 한 번 더 두드린다.
+// 사람 눈에는 조금 늦게 뜨는 것으로만 보인다.
+async function fetchBoard(q) {
+  let 마지막;
+  for (let n = 0; n < 2; n++) {
+    try {
+      const res = await fetch(BOARD_URL + '/top' + q);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    } catch (e) {
+      마지막 = e;
+      if (n === 0) await new Promise(r => setTimeout(r, 900));
+    }
+  }
+  throw 마지막;
+}
+
 // 게임 중에도 순위를 볼 수 있는 패널. 펼칠 때마다 새로 불러온다.
 async function loadRankPanel() {
   const box = $('rank-body');
@@ -2203,8 +2221,7 @@ async function loadRankPanel() {
   box.innerHTML = boardMsg(t('board_loading'));
   try {
     const q = DAILY_MODE ? `?mode=daily&day=${todayNumber()}` : '?mode=free';
-    const res = await fetch(BOARD_URL + '/top' + q);
-    const data = await res.json();
+    const data = await fetchBoard(q);
     box.innerHTML = boardTable(data.entries);
   } catch (e) {
     box.innerHTML = boardMsg(t('board_error'));
@@ -2216,18 +2233,26 @@ async function submitScore(r) {
   const name = playerName();
   if (!name) return;
 
+  const 보내기 = () => fetch(BOARD_URL + '/score', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode:  r.daily ? 'daily' : 'free',
+      day:   r.daily || 0,
+      name,  score: r.score, stage: r.stage, combo: r.combo,
+      key:   playerKey(),
+    }),
+  });
+
   boardMessage(t('board_loading'));
   try {
-    const res = await fetch(BOARD_URL + '/score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode:  r.daily ? 'daily' : 'free',
-        day:   r.daily || 0,
-        name,  score: r.score, stage: r.stage, combo: r.combo,
-        key:   playerKey(),
-      }),
-    });
+    // 순위표가 식어 있으면 첫 시도가 실패한다. 기록을 잃는 건 제일 나쁘니 한 번 더 보낸다.
+    // 다만 서버가 판단해서 거절한 것(이름 중복·도배·이상한 점수)은 다시 보내도 같으므로 그대로 둔다.
+    let res = await 보내기();
+    if (res.status >= 500) {
+      await new Promise(r2 => setTimeout(r2, 900));
+      res = await 보내기();
+    }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     renderBoard(data.entries);

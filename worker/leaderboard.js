@@ -125,7 +125,7 @@ export class Board {
     }
 
     const body  = await request.json();
-    const daily = !!url.searchParams.get('daily');
+    const daily = !!body.daily;
 
     // 인스턴스가 하나여도 그것만으로는 부족하다. 저장소를 기다리는 사이에
     // 다른 요청이 끼어들어서 같은 목록을 읽고 서로를 덮어쓴다 —
@@ -163,8 +163,46 @@ export class Board {
 const boardStub = (env, key) => env.BOARD.get(env.BOARD.idFromName(key));
 const inner = (path, key) => `https://board/${path}?key=${encodeURIComponent(key)}`;
 
+// Durable Object가 식어 있으면 첫 호출이 그냥 실패할 때가 있다.
+// Cloudflare가 내부 오류를 던지고 우리 코드는 실행조차 안 된다.
+// 재보니 30번 중 5번이 이걸로 실패했고, 전부 식은 직후에 몰려 있었다.
+// 조금 기다렸다 다시 두드리면 붙는다.
+//
+// 등록(write)도 재시도한다. 같은 기록이 두 번 들어가도 이름당 최고 하나만
+// 남기므로 결과가 달라지지 않는다. 반대로 점수를 잃는 쪽이 훨씬 나쁘다.
+const 대기 = [200, 500, 1000];   // 재보니 450ms로는 모자랐다
+
+async function callBoard(env, key, path, init) {
+  let 마지막;
+  for (let n = 0; n <= 대기.length; n++) {
+    try {
+      return await boardStub(env, key).fetch(inner(path, key), init);
+    } catch (e) {
+      마지막 = e;
+      if (n < 대기.length) await new Promise(r => setTimeout(r, 대기[n]));
+    }
+  }
+  throw 마지막;
+}
+
+// 순위표를 미리 깨워둔다.
+// 플레이어가 적어서 순위표는 대부분 식어 있고, 식은 첫 호출이 실패한다.
+// 5분마다 한 번씩 읽어주면 사람이 들어왔을 때 이미 깨어 있다.
+// (데일리는 시간대 차이로 회차가 하루 어긋날 수 있어 앞뒤로 같이 깨운다)
+async function warmBoards(env) {
+  const 오늘 = Math.floor((Date.now() - Date.UTC(2026, 7, 10)) / 86400000) + 1;
+  const 키들 = ['board:free', ...[오늘 - 1, 오늘, 오늘 + 1].map(d => `board:daily:${d}`)];
+  await Promise.allSettled(키들.map(k => callBoard(env, k, 'read')));
+}
+
 export default {
+  // Cloudflare가 5분마다 부른다 (wrangler.toml의 triggers)
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(warmBoards(env));
+  },
+
   async fetch(request, env) {
+   try {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
     const url = new URL(request.url);
@@ -174,7 +212,7 @@ export default {
       const mode = url.searchParams.get('mode') === 'daily' ? 'daily' : 'free';
       const day  = Number(url.searchParams.get('day')) || 0;
       const key  = boardKey(mode, day);
-      const res  = await boardStub(env, key).fetch(inner('read', key));
+      const res  = await callBoard(env, key, 'read');
       return json(await res.json(), res.status);
     }
 
@@ -202,12 +240,12 @@ export default {
       if (combo > maxComboFor(stage))   return json({ error: 'combo too high for stage' }, 400);
 
       const key = boardKey(mode, day);
-      const to  = inner('write', key) + (mode === 'daily' ? '&daily=1' : '');
-      const res = await boardStub(env, key).fetch(to, {
+      const res = await callBoard(env, key, 'write', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name, score, stage, combo,
+          daily: mode === 'daily',
           own: await ownerHash(body.key),
           ip:  request.headers.get('CF-Connecting-IP') || 'unknown',
         }),
@@ -216,5 +254,12 @@ export default {
     }
 
     return json({ error: 'not found' }, 404);
+
+   } catch (e) {
+     // 재시도까지 실패했다는 뜻. 여기서 그냥 터지면 Cloudflare가 HTML
+     // 오류 페이지를 돌려주고, 클라이언트는 그걸 JSON으로 읽다 또 터진다.
+     // JSON으로 돌려줘야 "순위를 못 불러왔어"까지만 뜨고 끝난다.
+     return json({ error: 'board unavailable' }, 503);
+   }
   },
 };
