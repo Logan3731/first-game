@@ -470,6 +470,60 @@
   .start-note { color: #6f7688; font-size: 13px; min-height: 18px; }
   #start .ov-actions button { padding: 15px 30px; font-size: 16px; }
 
+  /* ── 설명서 ─────────────────────────────── */
+  .start-manual {
+    background: none; border: none; cursor: pointer;
+    color: #6f7688; font-family: inherit; font-size: 13px;
+    text-decoration: underline; text-underline-offset: 3px; padding: 4px;
+  }
+  .start-manual:hover { color: #b6bcca; }
+
+  /* 오버레이는 가운데 정렬인데 설명서는 길어서 위에서부터 읽혀야 한다 */
+  #manual-ov { justify-content: flex-start; padding: 0; }
+
+  .manual-sheet {
+    width: 100%; max-width: 560px; margin: auto;
+    background: #1a1d24; border: 1px solid #2a3040; border-radius: 14px;
+    display: flex; flex-direction: column;
+    max-height: 92vh; overflow: hidden; text-align: left;
+  }
+  .manual-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px; border-bottom: 1px solid #2a3040; flex: none;
+  }
+  .manual-head h2 { font-size: 19px; }
+  .manual-close {
+    background: none; border: none; cursor: pointer;
+    color: #6f7688; font-size: 18px; font-family: inherit; padding: 4px 8px;
+  }
+  .manual-close:hover { color: #e8eaf0; }
+
+  .manual-scroll { overflow-y: auto; padding: 18px; -webkit-overflow-scrolling: touch; }
+
+  .manual-sec { margin-bottom: 26px; }
+  .manual-sec:last-child { margin-bottom: 4px; }
+  .manual-sec h3 {
+    font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    color: #6f7688; margin-bottom: 11px;
+  }
+  .manual-sec p, .manual-sec li { color: #b6bcca; font-size: 14px; line-height: 1.7; }
+  .manual-sec ol { padding-left: 19px; }
+  .manual-sec ol li { margin-bottom: 7px; }
+  .manual-sec b { color: #e8eaf0; }
+
+  /* 용어 한 줄 = 이름 + 뜻 */
+  .term-row { padding: 11px 0; border-top: 1px solid #232833; }
+  .term-row:first-child { border-top: none; padding-top: 0; }
+  .term-row .t { font-size: 14px; font-weight: 700; color: #e8eaf0; }
+  .term-row .d { font-size: 13.5px; color: #8b91a3; line-height: 1.65; margin-top: 3px; }
+
+  /* 칩 계산 예시 — 이게 이 설명서의 핵심이다 */
+  .manual-ex {
+    background: #12141a; border-radius: 10px; padding: 13px 14px; margin-top: 10px;
+    font-size: 13.5px; color: #b6bcca; line-height: 1.75;
+  }
+  .manual-ex .hi { color: #5bc8ff; font-weight: 700; }
+
   /* .overlay 규칙보다 뒤에 와야 오버레이에도 제대로 먹는다 */
   .hidden { display: none; }
 </style>
@@ -483,6 +537,7 @@
       <button class="lang-btn" id="mode-free" data-i18n="mode_free">Free</button>
     </div>
     <div class="bar-group">
+      <button class="lang-btn" id="manual-btn" title="?">?</button>
       <button class="lang-btn" data-sound>🔊</button>
       <button class="lang-btn" data-lang="en">EN</button>
       <button class="lang-btn" data-lang="ko">한국어</button>
@@ -579,7 +634,20 @@
     <button class="btn-play" id="start-daily"></button>
     <button class="btn-discard" id="start-free"></button>
   </div>
+  <button class="start-manual" id="start-manual"></button>
   <p class="start-note" id="start-note"></p>
+</div>
+
+<!-- 설명서. 제일 많이 나온 질문이 "칩이 뭐냐"였는데,
+     칩은 족보 점수만이 아니라 카드 숫자가 더해진 값이라 어디에도 안 적혀 있었다. -->
+<div class="overlay hidden" id="manual-ov">
+  <div class="manual-sheet">
+    <div class="manual-head">
+      <h2 id="manual-title"></h2>
+      <button class="manual-close" id="manual-close">✕</button>
+    </div>
+    <div class="manual-scroll" id="manual-body"></div>
+  </div>
 </div>
 
 <div class="overlay hidden" id="overlay">
@@ -778,6 +846,7 @@ const I18N = {
     start_daily_done:   'Daily result',
     start_free:         'Free play',
     start_note_done:    "Today's daily is done — a new one tomorrow",
+    manual_link:        'How to play →',
     daily_done:  "Today's daily is done",
     to_free:     'Free play',
     follow_me:   'New games @logan_devvv',
@@ -857,6 +926,7 @@ const I18N = {
     start_daily_done:   '데일리 결과 보기',
     start_free:         '자유 모드',
     start_note_done:    '오늘 데일리는 끝났어 — 내일 새 문제가 나와',
+    manual_link:        '어떻게 하는 게임인가 →',
     daily_done:  '오늘 데일리는 이미 했어',
     to_free:     '자유 모드로',
     follow_me:   '새 게임 소식 @logan_devvv',
@@ -1183,6 +1253,128 @@ const RANK_NAMES = ['', 'A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 // 카드 한 장이 주는 칩. A는 11, 그림카드는 10.
 const chipsOf = rank => rank === 1 ? 11 : Math.min(rank, 10);
 
+
+// ══════════════════════════════════════════════
+//  설명서
+//  "칩이 뭐냐"가 제일 많은 질문이었다. 사람들이 왜 모르겠는지를
+//  설명하지 못한 이유는, 족보표에는 '원페어 10 × 2'라고 적혀 있는데
+//  화면에는 '30 × 2'가 뜨기 때문이다. 카드 숫자가 더해진다는 걸
+//  어디에도 안 적어놨다. 그 차이를 메우는 게 이 설명서의 목적이다.
+//  순서는 카드 → 용어 → 규칙.
+// ══════════════════════════════════════════════
+
+const MANUAL = {
+  ko: {
+    title: '어떻게 하는 게임인가',
+    카드: {
+      h: '카드',
+      p: '트럼프 52장을 씁니다. 무늬 4개(♠ ♥ ♦ ♣) × 숫자 13개.',
+      ex: '카드마다 <span class="hi">칩 값</span>이 있습니다<br>'
+        + 'A = 11 · J, Q, K = 10 · 나머지는 숫자 그대로 (7이면 7)',
+    },
+    용어: {
+      h: '용어',
+      list: [
+        ['칩',    '점수의 바탕이 되는 숫자. <b>족보의 기본 칩 + 그 족보를 이룬 카드들의 칩</b>을 더한 값입니다. 여기가 제일 헷갈리는 부분이라 아래에 예를 뒀습니다.'],
+        ['배수',  '족보마다 정해진 곱하기 수. 족보표에서 볼 수 있습니다.'],
+        ['연쇄',  '직전에 낸 패보다 칩이 <b>높으면</b> 1씩 오릅니다. 낮으면 1로 돌아갑니다. 이 게임의 핵심입니다.'],
+        ['핸드',  '카드를 낼 수 있는 횟수. 다 쓰면 그 판이 끝납니다.'],
+        ['버리기', '손패를 바꾸는 횟수. 점수는 나가지 않습니다.'],
+        ['스테이지', '목표 점수를 넘기면 다음으로 갑니다. 목표는 갈수록 커집니다.'],
+        ['증강',  '스테이지를 깰 때마다 셋 중 하나를 고르는 능력입니다.'],
+      ],
+    },
+    계산: {
+      h: '칩은 이렇게 계산됩니다',
+      ex: 'J♠ 와 J♣ 로 <b>원페어</b>를 만들었다면<br><br>'
+        + '원페어 기본 <span class="hi">10</span> + J <span class="hi">10</span> + J <span class="hi">10</span> = <span class="hi">30칩</span><br>'
+        + '30칩 × 배수 2 × 연쇄 1 = <b>60점</b>',
+      p: '족보표에 적힌 <b>10 × 2</b>는 기본값입니다. 실제 화면에 30이 뜨는 건 카드 숫자가 더해졌기 때문입니다.<br><br>'
+       + '<b>족보를 이루지 않은 카드는 더해지지 않습니다.</b> 5장을 골라도 페어를 만든 2장만 칩이 됩니다.',
+    },
+    규칙: {
+      h: '한 번의 순서',
+      steps: [
+        '손패에서 카드를 고릅니다 (최대 5장).',
+        '플레이를 누르면 <b>칩 × 배수 × 연쇄</b> 만큼 점수가 들어옵니다.',
+        '방금 낸 칩이 <b>다음 연쇄의 기준</b>이 됩니다. 다음 패는 이 칩을 넘겨야 연쇄가 오릅니다.',
+        '마음에 안 드는 카드는 버리기로 바꿉니다. 버리기는 핸드를 쓰지 않습니다.',
+        '목표 점수를 넘기면 스테이지 클리어. 증강을 하나 고릅니다.',
+        '핸드를 다 쓰고도 목표를 못 넘기면 그 판이 끝납니다.',
+      ],
+    },
+    팁: {
+      h: '처음이라면',
+      p: '센 패를 아껴두고 <b>약한 패부터 순서대로</b> 내보세요. 연쇄는 칩이 계속 올라가야 쌓이기 때문에, 제일 센 패를 먼저 내면 그 뒤로는 넘길 수가 없어서 연쇄가 끊깁니다.',
+    },
+  },
+  en: {
+    title: 'How to play',
+    카드: {
+      h: 'CARDS',
+      p: 'A standard 52-card deck. 4 suits (♠ ♥ ♦ ♣) × 13 ranks.',
+      ex: 'Every card is worth <span class="hi">chips</span><br>'
+        + 'A = 11 · J, Q, K = 10 · others are their own number (a 7 is 7)',
+    },
+    용어: {
+      h: 'TERMS',
+      list: [
+        ['Chips',    'The base of your score. It is <b>the hand type’s base chips plus the chips of the cards that formed it</b>. This is the confusing part — see the example below.'],
+        ['Mult',     'A multiplier fixed per hand type. See the hand guide.'],
+        ['Chain',    'Goes up by 1 when your hand beats the previous one <b>in chips</b>. Drops to 1 if it does not. This is the heart of the game.'],
+        ['Hands',    'How many times you can play cards. Run out and the run ends.'],
+        ['Discards', 'How many times you can swap cards. Costs no score.'],
+        ['Stage',    'Beat the target score to move on. Targets keep growing.'],
+        ['Upgrade',  'Clear a stage and you pick one of three.'],
+      ],
+    },
+    계산: {
+      h: 'HOW CHIPS ARE COUNTED',
+      ex: 'Make a <b>Pair</b> with J♠ and J♣<br><br>'
+        + 'Pair base <span class="hi">10</span> + J <span class="hi">10</span> + J <span class="hi">10</span> = <span class="hi">30 chips</span><br>'
+        + '30 chips × 2 mult × 1 chain = <b>60 points</b>',
+      p: 'The <b>10 × 2</b> in the hand guide is the base. The screen shows 30 because the card values were added.<br><br>'
+       + '<b>Cards that do not form the hand add nothing.</b> Pick 5 cards and only the 2 making the pair count.',
+    },
+    규칙: {
+      h: 'ONE TURN',
+      steps: [
+        'Pick cards from your hand (up to 5).',
+        'Press Play and you score <b>chips × mult × chain</b>.',
+        'The chips you just played become <b>the bar for your chain</b>. Your next hand must beat it.',
+        'Swap cards you do not want with Discard. Discarding costs no hand.',
+        'Beat the target and the stage is cleared. Pick one upgrade.',
+        'Run out of hands without beating the target and the run ends.',
+      ],
+    },
+    팁: {
+      h: 'IF THIS IS YOUR FIRST RUN',
+      p: 'Save your strong hands and <b>play weak ones first</b>. The chain only grows while chips keep rising, so if you spend your best hand early, nothing can beat it and the chain breaks.',
+    },
+  },
+};
+
+function renderManual() {
+  const g = MANUAL[LANG];
+  const 절 = (h, inner) => `<div class="manual-sec"><h3>${h}</h3>${inner}</div>`;
+
+  $('manual-title').textContent = g.title;
+  $('manual-body').innerHTML =
+      절(g.카드.h, `<p>${g.카드.p}</p><div class="manual-ex">${g.카드.ex}</div>`)
+    + 절(g.용어.h, g.용어.list.map(([t, d]) =>
+        `<div class="term-row"><div class="t">${t}</div><div class="d">${d}</div></div>`).join(''))
+    + 절(g.계산.h, `<div class="manual-ex">${g.계산.ex}</div><p style="margin-top:12px">${g.계산.p}</p>`)
+    + 절(g.규칙.h, `<ol>${g.규칙.steps.map(x => `<li>${x}</li>`).join('')}</ol>`)
+    + 절(g.팁.h,  `<p>${g.팁.p}</p>`);
+}
+
+function openManual() {
+  renderManual();
+  $('manual-ov').classList.remove('hidden');
+  $('manual-body').scrollTop = 0;
+  track('manual-open');
+}
+const closeManual = () => $('manual-ov').classList.add('hidden');
 
 // ══════════════════════════════════════════════
 //  게임 상태
@@ -2127,7 +2319,15 @@ function setLang(lang) {
   applyStaticText();
   render();                       // 족보표·안내문 등 동적 문자열까지 다시 그린다
   if (!$('start').classList.contains('hidden')) showStart();   // 시작 화면 문구도
+  if (!$('manual-ov').classList.contains('hidden')) renderManual();   // 설명서를 열어둔 채 바꿔도
 }
+
+$('manual-btn').onclick   = openManual;
+$('start-manual').onclick = openManual;
+$('manual-close').onclick = closeManual;
+// 바깥을 눌러도 닫힌다. 안쪽을 눌렀을 때 닫히면 안 되므로 대상이 배경일 때만.
+$('manual-ov').onclick = e => { if (e.target === $('manual-ov')) closeManual(); };
+addEventListener('keydown', e => { if (e.key === 'Escape') closeManual(); });
 
 $('btn-play').onclick    = play;
 $('btn-discard').onclick = discard;
@@ -2144,6 +2344,7 @@ function showStart() {
 
   $('start-title').textContent = t('title');
   $('start-tag').textContent   = t('chain_intro');
+  $('start-manual').textContent = t('manual_link');
   $('start-daily').textContent = 완료   ? t('start_daily_done')
                                : 진행중 ? t('start_daily_resume')
                                :          t('start_daily');
