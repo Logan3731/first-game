@@ -107,6 +107,27 @@
   .hand-name.active { color: #e8eaf0; }
 
   /* 연쇄 상태 안내 */
+  /* 마지막 핸드 경고 — 진행바 바로 아래, 놓칠 수 없는 자리 */
+  .last-hand {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffd75b;
+    background: #2a2413;
+    border-radius: 8px;
+    padding: 7px 10px;
+  }
+
+  /* 증강 고를 때 보여주는 현재 수치 */
+  .ov-stats {
+    margin: 2px 0 14px;
+    text-align: center;
+    font-size: 13px;
+    color: #8b91a3;
+  }
+  .ov-stats b { color: #e8eaf0; font-weight: 700; }
+
   .chain { font-size: 13px; color: #565c6e; min-height: 16px; }
   .chain.keep  { color: #7bff9b; }
   .chain.break { color: #ff5b7b; }
@@ -493,6 +514,9 @@
 
   <div class="progress"><div class="progress-fill" id="progress"></div></div>
 
+  <!-- 핸드가 하나 남았을 때만 뜨는 경고. 모르고 지르면 판이 끝나버린다 -->
+  <div class="last-hand hidden" id="last-hand"></div>
+
   <div class="stage-area">
     <div class="hand-name" id="hand-name" data-i18n="pick_cards">Pick your cards (up to 5)</div>
     <div class="chain" id="chain"></div>
@@ -570,6 +594,8 @@
       <button class="btn-play" id="name-save" data-i18n="name_save">OK</button>
     </div>
   </div>
+  <!-- 증강은 손패·핸드·버리기를 바꾸는 게 많아서 지금 값을 알아야 고를 수 있다 -->
+  <div class="ov-stats hidden" id="ov-stats"></div>
   <div class="upgrades hidden" id="ov-upgrades"></div>
   <div class="ov-actions">
     <button class="btn-play" id="ov-btn"></button>
@@ -708,11 +734,15 @@ const I18N = {
     teach_play:  'Now press Play to score them',
     chain_first: "This hand's chips become the bar to beat",
     chain_carry: combo => `Chain ×${combo} carried over — a new stage starts fresh, any hand keeps it`,
-    chain_last:  (name, chips, combo) => `Last: ${name} ${chips} chips · Chain ×${combo} — next must beat ${chips}`,
-    chain_hold:  (a, b, next) => `${a} > ${b} chips · Chain holds → ×${next}`,
+    chain_last:  (name, chips, combo, cond) => `Last: ${name} ${chips} chips · Chain ×${combo} — next must ${cond}`,
+    chain_hold:  (a, sym, b, next) => `${a} ${sym} ${b} chips · Chain holds → ×${next}`,
     chain_max:   cap => `Chain maxed ×${cap}`,
-    chain_break: (a, b, combo) => `${a} ≤ ${b} chips · Chain breaks (×${combo} → ×1)`,
-    chain_none:  (a, b) => `${a} ≤ ${b} chips · No chain`,
+    chain_break: (a, sym, b, combo, next) => `${a} ${sym} ${b} chips · Chain breaks (×${combo} → ×${next})`,
+    chain_none:  (a, sym, b) => `${a} ${sym} ${b} chips · No chain`,
+    need_over:    chips => `beat ${chips}`,
+    need_atleast: chips => `reach ${chips}`,
+    last_hand:   'Last hand — no more plays after this',
+    cur_stats:   (hand, plays, disc) => `Hand ${hand} · Plays ${plays} · Discards ${disc}`,
 
     lbl_chips: 'CHIPS',
     lbl_mult:  'MULT',
@@ -782,11 +812,15 @@ const I18N = {
     teach_play:  '이제 플레이를 누르면 점수가 돼',
     chain_first: '이 핸드의 칩이 다음 연쇄의 기준이 돼',
     chain_carry: combo => `연쇄 ×${combo} 유지 중 — 새 스테이지는 아무 패로나 이어갈 수 있어`,
-    chain_last:  (name, chips, combo) => `직전 ${name} ${chips}칩 · 연쇄 ×${combo} — 다음은 ${chips}칩 초과`,
-    chain_hold:  (a, b, next) => `${a}칩 > ${b}칩 · 연쇄 유지 → ×${next}`,
+    chain_last:  (name, chips, combo, 조건) => `직전 ${name} ${chips}칩 · 연쇄 ×${combo} — 다음은 ${조건}`,
+    chain_hold:  (a, sym, b, next) => `${a}칩 ${sym} ${b}칩 · 연쇄 유지 → ×${next}`,
     chain_max:   cap => `연쇄 최대치 ×${cap}`,
-    chain_break: (a, b, combo) => `${a}칩 ≤ ${b}칩 · 연쇄 끊김 (×${combo} → ×1)`,
-    chain_none:  (a, b) => `${a}칩 ≤ ${b}칩 · 연쇄 안 붙음`,
+    chain_break: (a, sym, b, combo, next) => `${a}칩 ${sym} ${b}칩 · 연쇄 끊김 (×${combo} → ×${next})`,
+    chain_none:  (a, sym, b) => `${a}칩 ${sym} ${b}칩 · 연쇄 안 붙음`,
+    need_over:    chips => `${chips}칩 초과`,
+    need_atleast: chips => `${chips}칩 이상`,
+    last_hand:   '마지막 핸드 — 이번이 끝이야',
+    cur_stats:   (hand, plays, disc) => `손패 ${hand} · 핸드 ${plays} · 버리기 ${disc}`,
 
     lbl_chips: '칩',
     lbl_mult:  '배수',
@@ -1459,9 +1493,13 @@ function teachPick() {
 // 직전 핸드보다 칩이 높아야 이어진다. 족보 종류는 상관없다.
 // → 같은 족보를 반복하는 것만으로는 오래 못 가고,
 //   "낮은 패를 먼저 쓰고 센 패를 아껴두는" 판단이 생긴다.
+// 연쇄가 이어지는 조건. 안내 문구도 반드시 이걸 써야 한다.
+// 예전엔 문구 쪽이 따로 `>`로 비교해서, 같은 칩 허용 업그레이드를 골라도
+// 실제로는 이어지는데 화면에는 "연쇄 끊김"이라고 떴다.
+const chainKept = chips => state.chainEqual ? chips >= state.lastChips : chips > state.lastChips;
+
 function comboFor(chips) {
-  const 이김 = state.chainEqual ? chips >= state.lastChips : chips > state.lastChips;
-  if (이김) return Math.min(state.combo + 1, state.comboCap);
+  if (chainKept(chips)) return Math.min(state.combo + 1, state.comboCap);
 
   // 끊겼을 때 어디까지 떨어지는가 (업그레이드로 완화할 수 있다)
   const 바닥 = state.comboFloor;
@@ -1571,6 +1609,11 @@ function render() {
   $('hud-score').textContent  = state.stageScore.toLocaleString();
   $('hud-total').textContent  = t('hud_total', state.totalScore.toLocaleString());
   $('hud-left').textContent   = `${state.handsLeft} / ${state.discardsLeft}`;
+
+  // 핸드가 하나 남았을 때만 경고한다. 숫자만 보고는 잘 안 알아챈다.
+  $('last-hand').classList.toggle('hidden', state.handsLeft !== 1);
+  if (state.handsLeft === 1) $('last-hand').textContent = t('last_hand');
+
   $('progress').style.width   = Math.min(100, state.stageScore / target * 100) + '%';
 
   // 손패
@@ -1670,19 +1713,26 @@ function renderChain(preview) {
 
   const need = state.lastChips;   // 이 칩을 넘겨야 이어진다
 
+  // 같은 칩도 이어지는 업그레이드를 골랐으면 부등호와 조건 문구도 같이 바뀐다
+  const 유지기호 = state.chainEqual ? '≥' : '>';
+  const 끊김기호 = state.chainEqual ? '<' : '≤';
+
   if (!preview) {
-    el.textContent = t('chain_last', state.lastName, need, state.combo);
-  } else if (preview.chips > need) {
+    el.textContent = t('chain_last', state.lastName, need, state.combo,
+                       t(state.chainEqual ? 'need_atleast' : 'need_over', need));
+  } else if (chainKept(preview.chips)) {
     const next = comboFor(preview.chips);
     el.classList.add('keep');
     el.textContent = next >= state.comboCap
       ? t('chain_max', state.comboCap)
-      : t('chain_hold', preview.chips, need, next);
+      : t('chain_hold', preview.chips, 유지기호, need, next);
   } else {
     el.classList.add('break');
+    // 어디까지 떨어지는지도 실제 값으로. 바닥을 올리거나 절반만 떨어지는
+    // 업그레이드가 있는데 예전엔 항상 ×1이라고 적혀 있었다.
     el.textContent = state.combo > 1
-      ? t('chain_break', preview.chips, need, state.combo)
-      : t('chain_none', preview.chips, need);
+      ? t('chain_break', preview.chips, 끊김기호, need, state.combo, comboFor(preview.chips))
+      : t('chain_none', preview.chips, 끊김기호, need);
   }
 }
 
@@ -2010,8 +2060,14 @@ function showOverlay(title, score, desc, btnText, onClick, share, upgrades, shar
 
   // 업그레이드를 고르는 화면에서는 버튼 대신 카드가 선택지가 된다
   $('ov-upgrades').classList.toggle('hidden', !upgrades);
+  $('ov-stats').classList.toggle('hidden', !upgrades);
   $('ov-btn').classList.toggle('hidden', !!upgrades);
-  if (upgrades) renderUpgrades(upgrades);
+  if (upgrades) {
+    // 고를 증강이 이 값들을 건드리므로 지금 값을 같이 보여준다
+    $('ov-stats').innerHTML = t('cur_stats',
+      `<b>${state.handSize}</b>`, `<b>${state.handsMax}</b>`, `<b>${state.discardsMax}</b>`);
+    renderUpgrades(upgrades);
+  }
 
   if (onClick) {
     $('ov-btn').textContent = btnText;
