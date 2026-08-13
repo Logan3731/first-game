@@ -1921,11 +1921,15 @@ function boardTable(entries) {
 
   let 행 = entries.slice(0, TOP_SHOWN).map(줄).join('');
 
-  // 10등 밖이면 내 줄을 아래에 따로 붙인다.
-  // 기록을 냈는데 순위표 어디에도 안 보이면 안 올라간 걸로 오해한다.
+  // 10등 밖이면 내 줄을 위아래 한 명씩 붙여서 아래에 따로 보여준다.
+  // 기록을 냈는데 순위표 어디에도 안 보이면 안 올라간 걸로 오해하고,
+  // 내 줄만 있으면 몇 점 차이로 밀렸는지를 알 수 없다.
   const 내자리 = 나 ? entries.findIndex(e => e.name === 나) : -1;
   if (내자리 >= TOP_SHOWN) {
-    행 += '<tr class="board-gap"><td colspan="5">⋯</td></tr>' + 줄(entries[내자리], 내자리);
+    const 시작 = Math.max(TOP_SHOWN, 내자리 - 1);   // 위쪽 10줄과 겹치지 않게
+    const 끝   = Math.min(entries.length, 내자리 + 2);
+    if (시작 > TOP_SHOWN) 행 += '<tr class="board-gap"><td colspan="5">⋯</td></tr>';
+    행 += entries.slice(시작, 끝).map((e, i) => 줄(e, 시작 + i)).join('');
   }
 
   return '<table class="board-table"><thead><tr>'
