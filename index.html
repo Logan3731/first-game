@@ -107,8 +107,8 @@
   .hand-name.active { color: #e8eaf0; }
 
   /* 연쇄 상태 안내 */
-  /* 마지막 핸드 경고 — 진행바 바로 아래, 놓칠 수 없는 자리 */
-  .last-hand {
+  /* 마지막 핸드·버리기 경고 — 진행바 바로 아래, 놓칠 수 없는 자리 */
+  .warn {
     margin-top: 8px;
     text-align: center;
     font-size: 13px;
@@ -118,6 +118,8 @@
     border-radius: 8px;
     padding: 7px 10px;
   }
+  /* 버리기만 하나 남은 건 판이 끝나는 게 아니라 덜 세게 */
+  .warn.soft { color: #8b91a3; background: #1a1d24; font-weight: 400; }
 
   /* 증강 고를 때 보여주는 현재 수치 */
   .ov-stats {
@@ -514,8 +516,8 @@
 
   <div class="progress"><div class="progress-fill" id="progress"></div></div>
 
-  <!-- 핸드가 하나 남았을 때만 뜨는 경고. 모르고 지르면 판이 끝나버린다 -->
-  <div class="last-hand hidden" id="last-hand"></div>
+  <!-- 남은 자원이 하나뿐일 때 뜨는 경고. 모르고 지르면 판이 끝나버린다 -->
+  <div class="warn hidden" id="warn"></div>
 
   <div class="stage-area">
     <div class="hand-name" id="hand-name" data-i18n="pick_cards">Pick your cards (up to 5)</div>
@@ -742,6 +744,7 @@ const I18N = {
     need_over:    chips => `beat ${chips}`,
     need_atleast: chips => `reach ${chips}`,
     last_hand:   'Last hand — no more plays after this',
+    last_discard: 'Last discard',
     cur_stats:   (hand, plays, disc) => `Hand ${hand} · Plays ${plays} · Discards ${disc}`,
 
     lbl_chips: 'CHIPS',
@@ -820,6 +823,7 @@ const I18N = {
     need_over:    chips => `${chips}칩 초과`,
     need_atleast: chips => `${chips}칩 이상`,
     last_hand:   '마지막 핸드 — 이번이 끝이야',
+    last_discard: '버리기 1개 남음',
     cur_stats:   (hand, plays, disc) => `손패 ${hand} · 핸드 ${plays} · 버리기 ${disc}`,
 
     lbl_chips: '칩',
@@ -1610,9 +1614,14 @@ function render() {
   $('hud-total').textContent  = t('hud_total', state.totalScore.toLocaleString());
   $('hud-left').textContent   = `${state.handsLeft} / ${state.discardsLeft}`;
 
-  // 핸드가 하나 남았을 때만 경고한다. 숫자만 보고는 잘 안 알아챈다.
-  $('last-hand').classList.toggle('hidden', state.handsLeft !== 1);
-  if (state.handsLeft === 1) $('last-hand').textContent = t('last_hand');
+  // 남은 게 하나뿐이면 알려준다. 숫자(1 / 2)만 보고는 잘 안 알아챈다.
+  const 경고 = [];
+  if (state.handsLeft === 1)    경고.push(t('last_hand'));
+  if (state.discardsLeft === 1) 경고.push(t('last_discard'));
+  const 경고줄 = $('warn');
+  경고줄.classList.toggle('hidden', 경고.length === 0);
+  경고줄.classList.toggle('soft', state.handsLeft !== 1);
+  if (경고.length) 경고줄.textContent = 경고.join('  ·  ');
 
   $('progress').style.width   = Math.min(100, state.stageScore / target * 100) + '%';
 
