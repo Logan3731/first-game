@@ -1,6 +1,39 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "chain", "runtimeExecutable": "python3", "runtimeArgs": ["-m","http.server","8899"], "port": 8899 }
+    {
+      "name": "chain",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8899"
+      ],
+      "port": 8899
+    },
+    {
+      "name": "second-game",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8777",
+        "--directory",
+        "/Users/leeheegun/Documents/second-game"
+      ],
+      "port": 8777
+    },
+    {
+      "name": "landing",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8896",
+        "--directory",
+        "/Users/leeheegun/Documents/logan3731.github.io"
+      ],
+      "port": 8896
+    }
   ]
 }
