@@ -97,7 +97,8 @@ export class Board {
       list = raw ? JSON.parse(raw) : [];
       await this.state.storage.put('list', list);
     }
-    return list;
+    // 점수가 없는 항목은 잘못 들어간 것이다. 보여주지 않고, 다음에 쓸 때 빠진다.
+    return list.filter(e => e && typeof e.name === 'string' && Number.isFinite(e.score));
   }
 
   // 인스턴스가 하나뿐이라 이 카운터는 정확하다.
@@ -124,6 +125,16 @@ export class Board {
       return json({ entries: publicList(await this.load(key)) });
     }
 
+    // 이름을 쓸 수 있는지만 답한다. 아무것도 바꾸지 않는다.
+    if (url.pathname === '/check') {
+      const { name, own } = await request.json();
+      const 기존 = (await this.load(key)).find(e => e.name === name);
+      // 주인이 없거나(예전 기록) 내 것이면 쓸 수 있다
+      return json({ ok: !(기존 && 기존.own && 기존.own !== own) });
+    }
+
+    if (url.pathname !== '/write') return json({ error: 'not found' }, 404);
+
     const body  = await request.json();
     const daily = !!body.daily;
 
@@ -148,6 +159,14 @@ export class Board {
 
       await this.state.storage.put('list', top);
       if (daily) await this.state.storage.setAlarm(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
+      // KV에도 사본을 남긴다. Durable Object가 통째로 안 열리는 일이 실제로
+      // 있었는데(Cloudflare 내부 오류), 그때 읽기라도 되게 하려는 것이다.
+      // 쓰기는 계속 여기서만 하므로 동시 등록이 서로를 덮어쓰는 문제는 그대로 막힌다.
+      try {
+        await this.env.SCORES.put(key, JSON.stringify(top),
+          daily ? { expirationTtl: 60 * 60 * 24 * 3 } : {});
+      } catch (e) { /* 사본은 없어도 게임은 돌아간다 */ }
 
       return [200, { entries: publicList(top), rank: top.indexOf(entry) + 1 || null }];
     });
@@ -211,9 +230,39 @@ export default {
     if (request.method === 'GET' && url.pathname === '/top') {
       const mode = url.searchParams.get('mode') === 'daily' ? 'daily' : 'free';
       const day  = Number(url.searchParams.get('day')) || 0;
-      const key  = boardKey(mode, day);
-      const res  = await callBoard(env, key, 'read');
-      return json(await res.json(), res.status);
+      const key = boardKey(mode, day);
+      try {
+        const res = await callBoard(env, key, 'read');
+        return json(await res.json(), res.status);
+      } catch (e) {
+        // 저장소가 안 열려도 순위표는 보여준다. 사본이라 조금 늦을 수 있다.
+        console.log('READ_FALLBACK', String(e && e.message || e));
+        const raw = await env.SCORES.get(key);
+        return json({ entries: raw ? publicList(JSON.parse(raw)) : [], stale: true });
+      }
+    }
+
+    // ── 이름을 쓸 수 있는지 미리 확인 ──
+    // 15분 굴리고 나서 "그 이름 안 돼요"를 듣는 건 너무 늦다.
+    // 열쇠가 비밀값이라 주소에 안 붙이고 본문으로 받는다.
+    if (request.method === 'POST' && url.pathname === '/check') {
+      let b;
+      try { b = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
+      const name = String(b.name || '').trim().slice(0, 12);
+      if (!name) return json({ ok: false });
+
+      const key = boardKey(b.mode === 'daily' ? 'daily' : 'free', Number(b.day) || 0);
+      try {
+        const res = await callBoard(env, key, 'check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, own: await ownerHash(b.key) }),
+        });
+        return json(await res.json(), res.status);
+      } catch (e) {
+        // 확인 자체가 안 되면 막지는 않는다. 등록할 때 어차피 한 번 더 걸린다.
+        return json({ ok: true, unknown: true });
+      }
     }
 
     // ── 점수 등록 ──
@@ -256,6 +305,7 @@ export default {
     return json({ error: 'not found' }, 404);
 
    } catch (e) {
+     console.log('BOARD_FAIL', String(e && e.message || e), String(e && e.stack || '').slice(0, 300));
      // 재시도까지 실패했다는 뜻. 여기서 그냥 터지면 Cloudflare가 HTML
      // 오류 페이지를 돌려주고, 클라이언트는 그걸 JSON으로 읽다 또 터진다.
      // JSON으로 돌려줘야 "순위를 못 불러왔어"까지만 뜨고 끝난다.

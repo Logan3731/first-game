@@ -418,6 +418,10 @@
   .board-msg { padding: 6px 7px; color: #8b91a3; font-size: 13px; }
 
   .board-name { display: flex; gap: 6px; margin-top: 10px; }
+  .name-check { margin-top: 7px; font-size: 12.5px; min-height: 16px; color: #6f7688; }
+  .name-check.ok   { color: #7bff9b; }
+  .name-check.bad  { color: #ff5b7b; }
+  .btn-play[disabled] { opacity: .4; cursor: not-allowed; }
   .board-name input {
     flex: 1;
     min-width: 0;
@@ -663,6 +667,8 @@
       <input id="name-input" maxlength="12" placeholder="name">
       <button class="btn-play" id="name-save" data-i18n="name_save">OK</button>
     </div>
+    <!-- 15분 굴리고 나서 "그 이름 안 돼요"를 듣는 건 너무 늦다. 치는 동안 알려준다. -->
+    <div class="name-check" id="name-check"></div>
   </div>
   <!-- 증강은 손패·핸드·버리기를 바꾸는 게 많아서 지금 값을 알아야 고를 수 있다 -->
   <div class="ov-stats hidden" id="ov-stats"></div>
@@ -861,6 +867,9 @@ const I18N = {
     board_error:    'Ranking unavailable',
     board_empty:    'No scores yet — be the first',
     board_taken:    'That name is already on the board — pick another',
+    name_checking:  'Checking…',
+    name_free:      'This name is available',
+    name_used:      'Someone else is using this name',
     board_ask_name: 'Enter a name to join the ranking',
     name_hint:      'name',
     name_save:      'OK',
@@ -942,6 +951,9 @@ const I18N = {
     board_error:    '순위를 못 불러왔어',
     board_empty:    '아직 아무도 없어 — 1등 해봐',
     board_taken:    '그 이름은 이미 순위표에 있어 — 다른 이름으로 해줘',
+    name_checking:  '확인 중…',
+    name_free:      '쓸 수 있는 이름이야',
+    name_used:      '다른 사람이 쓰고 있는 이름이야',
     board_ask_name: '이름을 넣으면 순위에 올라가',
     name_hint:      '이름',
     name_save:      '등록',
@@ -2276,6 +2288,8 @@ function showBoard(r) {
   } else {
     $('board-name').classList.remove('hidden');
     $('name-input').value = '';
+    이름상태(null);
+    확인한이름 = ''; 쓸수있음 = true;
     boardMessage(t('board_ask_name'));
   }
 }
@@ -2435,11 +2449,59 @@ syncSoundButtons();   // 저장된 설정을 화면에 반영 (여기선 소리�
 // 펼칠 때마다 새로 불러온다 (다른 사람 점수가 그새 올라갔을 수 있다)
 $('rank').addEventListener('toggle', () => { if ($('rank').open) loadRankPanel(); });
 
+// 치는 동안 이름을 쓸 수 있는지 물어본다.
+// 판이 끝난 뒤에야 "그 이름 안 돼요"를 듣게 하면 안 된다.
+let 확인타이머 = null;
+let 확인한이름 = '';       // 마지막으로 답을 받은 이름
+let 쓸수있음   = true;
+
+function 이름상태(키, 종류) {
+  const el = $('name-check');
+  el.className = 'name-check' + (종류 ? ' ' + 종류 : '');
+  el.textContent = 키 ? t(키) : '';
+  $('name-save').disabled = (종류 === 'bad');
+}
+
+async function checkName(v) {
+  if (!BOARD_URL) return;
+  이름상태('name_checking');
+  try {
+    const res = await fetch(BOARD_URL + '/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: DAILY_MODE ? 'daily' : 'free',
+        day:  DAILY_MODE ? todayNumber() : 0,
+        name: v, key: playerKey(),
+      }),
+    });
+    const data = await res.json();
+    if (v !== $('name-input').value.trim().slice(0, 12)) return;   // 그 사이 더 쳤으면 버린다
+    확인한이름 = v;
+    쓸수있음   = !!data.ok;
+    이름상태(data.ok ? 'name_free' : 'name_used', data.ok ? 'ok' : 'bad');
+  } catch (e) {
+    // 물어보지 못했으면 막지 않는다. 등록할 때 어차피 한 번 더 걸린다.
+    이름상태(null);
+    쓸수있음 = true;
+  }
+}
+
+$('name-input').oninput = () => {
+  const v = $('name-input').value.trim().slice(0, 12);
+  clearTimeout(확인타이머);
+  if (!v) { 이름상태(null); 쓸수있음 = true; return; }
+  이름상태('name_checking');
+  확인타이머 = setTimeout(() => checkName(v), 400);   // 한 글자마다 묻지 않는다
+};
+
 $('name-save').onclick = () => {
   const v = $('name-input').value.trim().slice(0, 12);
   if (!v) return;
+  if (확인한이름 === v && !쓸수있음) return;     // 이미 안 된다고 답을 받은 이름
   localStorage.setItem('name', v);
   $('board-name').classList.add('hidden');
+  이름상태(null);
   submitScore(boardResult);
 };
 $('name-input').onkeydown = e => { if (e.key === 'Enter') $('name-save').click(); };
