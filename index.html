@@ -1185,6 +1185,7 @@ function loadDailyRun() {
     selected:     new Set(raw.selected),
     removedRanks: new Set(raw.removedRanks),
     고른기록:     raw.고른기록 || [],   // 이 항목이 없던 시절의 저장본도 있다
+    판정:         raw.판정 || null,
     rerolls:      raw.rerolls == null ? (DAILY_MODE ? 2 : 0) : raw.rerolls,
     locked:       false };   // 점수 연출 도중에 저장됐을 수 있다
   rng.setState(raw.rngState);
@@ -1523,6 +1524,11 @@ function newGame() {
   if (DAILY_MODE && loadDailyRun()) {
     track('daily-resume');
     render();
+    // 저장된 시점에 이미 끝나 있던 판이면 그대로 끝낸다.
+    // 연출 도중 새로고침해서 끝난 판을 되살리는 걸 여기서 막는다.
+    if (state.판정) { 판정따르기(); return; }
+    // 판정이 없던 시절의 저장본 대비 — 핸드가 없는데 목표도 못 넘겼으면 끝난 판이다
+    if (state.handsLeft <= 0 && state.stageScore < targetFor(state.stage)) { gameOver(); return; }
     return;
   }
 
@@ -1556,6 +1562,7 @@ function newGame() {
     // 밸런스 측정용. 어떤 3개가 떴고 그중 뭘 골랐는지를 스테이지별로 남긴다.
     // '몇 번 뽑혔나'만으로는 인기 증강인지 아무도 안 쓰는 증강인지 구분이 안 된다.
     고른기록:     [],
+    판정:         null,       // 확정된 승패 (연출 중 새로고침 대비)
     // 데일리는 하루 한 판이라 나쁜 패를 받으면 그날이 끝난다. 그래서 데일리에만 준다.
     // 매 스테이지 주면 안 쓸 이유가 없어 그냥 버튼이 되고, 한 판에 보는 증강이
     // 73% → 93%로 뛴다(무제한이 98%). 판당 2회면 78%라 지금과 거의 같다.
@@ -1580,6 +1587,7 @@ function startStage() {
   state.stageScore = 0;
   state.handsLeft = state.handsMax;
   state.discardsLeft = state.discardsMax;
+  state.판정 = null;
 
   // 칩 기준은 스테이지마다 초기화한다. 연쇄 자체는 유지된다.
   // 안 그러면 스테이지를 깨려고 지른 큰 패가 다음 스테이지 기준이 되어
@@ -1879,7 +1887,8 @@ function removeSelected() {
 }
 
 function play() {
-  if (state.locked || state.selected.size === 0) return;
+  // 핸드를 반드시 확인한다. 이게 없어서 0이나 음수로도 계속 낼 수 있었다.
+  if (state.locked || state.selected.size === 0 || state.handsLeft <= 0) return;
   localStorage.setItem('taught', '1');   // 한 번 내봤으면 유도는 끝
   const result = evaluate(selectedCards());
   const prevCombo = state.combo;
@@ -1905,6 +1914,17 @@ function play() {
   state.stageScore += result.score;
   state.totalScore += result.score;
 
+  // 판정은 지금 정해서 같이 저장한다.
+  // 연출이 끝난 뒤에 정하면, 그 사이에 새로고침해서 '아직 안 끝난 판'으로
+  // 되살릴 수 있다. 실제로 핸드를 0, -1로 만들어 무한히 이어간 제보가 있었다.
+  state.판정 = state.stageScore >= targetFor(state.stage) ? 'clear'
+             : state.handsLeft <= 0                      ? 'over'
+             :                                             null;
+
+  // 여기서 바로 저장한다. 그리기(render)는 연출 때문에 260ms 뒤에 오는데,
+  // 그때 저장하면 그 사이에 새로고침해서 방금 낸 패를 무를 수 있다.
+  saveDailyRun();
+
   // 낸 카드가 먼저 날아가고, 그 다음에 점수가 뜬다.
   // 사라지는 걸 보고 나서 결과가 나와야 "내가 낸 것"으로 읽힌다.
   const 날아갈카드 = [...document.querySelectorAll('.card.selected')];
@@ -1924,13 +1944,7 @@ function play() {
   // 연출이 끝난 뒤 승패 판정
   setTimeout(() => {
     state.locked = false;
-    if (state.stageScore >= targetFor(state.stage)) {
-      stageClear();
-    } else if (state.handsLeft <= 0) {
-      gameOver();
-    } else {
-      render();
-    }
+    판정따르기();
   }, 1250);   // 카드가 날아가고(260) 점수가 다 올라갈(520) 때까지 기다린다
 }
 
@@ -2157,6 +2171,16 @@ function 숫자올리기(el, 끝값, 시간 = 520) {
 const 튕기기 = (el, 클래스) => {
   el.classList.remove(클래스); void el.offsetWidth; el.classList.add(클래스);
 };
+
+// 이미 정해진 판정을 실행한다. 연출이 끝났을 때도, 새로고침 뒤 이어할 때도
+// 같은 함수를 쓴다 — 두 길이 갈리면 그 틈으로 빠져나갈 수 있다.
+function 판정따르기() {
+  const 판정 = state.판정;
+  state.판정 = null;
+  if (판정 === 'clear')     stageClear();
+  else if (판정 === 'over') gameOver();
+  else                      render();
+}
 
 function showScorePop(result) {
   $('hand-name').textContent = result.name;
