@@ -1039,12 +1039,10 @@ const I18N = {
     reroll_none:    'No rerolls left',
     tab_today:      'Today',
     tab_week:       'This week',
-    col_pts:        'PTS',
     col_days:       'DAYS',
-    col_best:       'BEST',
     board_weekly:   'This week',
     board_locked:   "Today's run is already recorded — a new one tomorrow",
-    week_help:      'Each day your <b>placing earns points</b> — 1st 10 · 2nd 7 · 3rd 5 · 4th 4 · 5th 3 · 6-10th 2 · just playing 1<br>Your weekly rank is the total. <b>Showing up daily</b> beats one big score.',
+    week_help:      '<b>Most days played wins.</b> Tie goes to the higher score.',
     name_checking:  'Checking…',
     name_free:      'This name is available',
     name_used:      'Someone else is using this name',
@@ -1133,12 +1131,10 @@ const I18N = {
     reroll_none:    '다시 뽑기를 다 썼어',
     tab_today:      '오늘',
     tab_week:       '이번 주',
-    col_pts:        '승점',
     col_days:       '참여',
-    col_best:       '최고점',
     board_weekly:   '이번 주',
     board_locked:   '오늘 기록은 이미 등록됐어 — 내일 새 문제가 나와',
-    week_help:      '매일 <b>등수만큼 승점</b>을 받아 — 1등 10 · 2등 7 · 3등 5 · 4등 4 · 5등 3 · 6~10등 2 · 참여만 해도 1<br>승점을 다 더한 게 주간 순위야. 하루 크게 내는 것보다 <b>매일 오는 게</b> 유리해.',
+    week_help:      '<b>많이 온 순서.</b> 같으면 점수 높은 순서.',
     name_checking:  '확인 중…',
     name_free:      '쓸 수 있는 이름이야',
     name_used:      '다른 사람이 쓰고 있는 이름이야',
@@ -2545,14 +2541,12 @@ function weeklyTable(entries) {
     `<tr class="${나 && e.name === 나 ? 'me' : ''}">`
     + `<td class="board-rank">${i + 1}</td>`
     + `<td class="board-name-cell">${escapeHtml(e.name)}</td>`
-    + `<td class="board-chain">${Number(e.pts) || 0}</td>`
-    + `<td>${Number(e.days) || 0}</td>`
-    + `<td>${Number(e.best).toLocaleString()}</td>`
+    + `<td class="board-chain">${Number(e.days) || 0}</td>`
+    + `<td>${Number(e.sum).toLocaleString()}</td>`
     + '</tr>').join('');
 
   return '<table class="board-table"><thead><tr>'
-       + `<th></th><th></th><th>${t('col_pts')}</th>`
-       + `<th>${t('col_days')}</th><th>${t('col_best')}</th>`
+       + `<th></th><th></th><th>${t('col_days')}</th><th>${t('col_score')}</th>`
        + `</tr></thead><tbody>${행}</tbody></table>`
        + `<div class="board-help">${t('week_help')}</div>`;
 }

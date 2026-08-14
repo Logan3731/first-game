@@ -185,13 +185,12 @@ export class Board {
 
 // ══════════════════════════════════════════════
 //  주간 순위
+//  규칙은 한 줄이어야 한다. "많이 온 순서, 같으면 점수 높은 순서."
+//
 //  점수를 그냥 더하면 하루 크게 낸 사람이 그 주를 통째로 가져간다.
-//  그래서 날마다 등수를 점수로 바꿔서 더한다. 100만 점이든 10만 점이든
-//  그날 1등이면 같은 10점이다. 꾸준히 온 사람이 위로 간다.
+//  등수를 승점으로 바꾸는 방식도 만들어봤는데, 표를 읽는 데 설명이 필요해서
+//  접었다. 참여일을 앞에 두면 같은 문제가 규칙 한 줄로 풀린다.
 // ══════════════════════════════════════════════
-
-const 등수점수 = 순위 => (순위 === 1 ? 10 : 순위 === 2 ? 7 : 순위 === 3 ? 5
-                       : 순위 === 4 ? 4 : 순위 === 5 ? 3 : 순위 <= 10 ? 2 : 1);
 
 const weekOf = day => Math.floor((day - 1) / 7) + 1;
 
@@ -207,9 +206,8 @@ async function weeklyBoard(env, week) {
     목록 = 목록.filter(e => e && typeof e.name === 'string' && Number.isFinite(e.score))
                .sort((a, b) => b.score - a.score);
 
-    목록.forEach((e, i) => {
-      const r = 사람.get(e.name) || { name: e.name, pts: 0, days: 0, best: 0, sum: 0 };
-      r.pts  += 등수점수(i + 1);
+    목록.forEach(e => {
+      const r = 사람.get(e.name) || { name: e.name, days: 0, sum: 0, best: 0 };
       r.days += 1;
       r.best  = Math.max(r.best, e.score);
       r.sum  += e.score;
@@ -217,8 +215,8 @@ async function weeklyBoard(env, week) {
     });
   }
 
-  // 점수가 같으면 총점이 높은 쪽이 위
-  return [...사람.values()].sort((a, b) => b.pts - a.pts || b.sum - a.sum).slice(0, TOP_N);
+  // 많이 온 사람이 위. 같으면 점수 합이 높은 쪽이 위.
+  return [...사람.values()].sort((a, b) => b.days - a.days || b.sum - a.sum).slice(0, TOP_N);
 }
 
 // ══════════════════════════════════════════════
