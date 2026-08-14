@@ -1041,9 +1041,10 @@ const I18N = {
     tab_week:       'This week',
     col_pts:        'PTS',
     col_days:       'DAYS',
+    col_best:       'BEST',
     board_weekly:   'This week',
     board_locked:   "Today's run is already recorded — a new one tomorrow",
-    week_help:      'Daily placing becomes points. 1st 10 · 2nd 7 · 3rd 5 · 4th 4 · 5th 3 · 6-10th 2 · rest 1',
+    week_help:      'Each day your <b>placing earns points</b> — 1st 10 · 2nd 7 · 3rd 5 · 4th 4 · 5th 3 · 6-10th 2 · just playing 1<br>Your weekly rank is the total. <b>Showing up daily</b> beats one big score.',
     name_checking:  'Checking…',
     name_free:      'This name is available',
     name_used:      'Someone else is using this name',
@@ -1132,11 +1133,12 @@ const I18N = {
     reroll_none:    '다시 뽑기를 다 썼어',
     tab_today:      '오늘',
     tab_week:       '이번 주',
-    col_pts:        '점수',
+    col_pts:        '승점',
     col_days:       '참여',
+    col_best:       '최고점',
     board_weekly:   '이번 주',
     board_locked:   '오늘 기록은 이미 등록됐어 — 내일 새 문제가 나와',
-    week_help:      '그날 등수가 점수가 돼. 1등 10 · 2등 7 · 3등 5 · 4등 4 · 5등 3 · 6~10등 2 · 나머지 1',
+    week_help:      '매일 <b>등수만큼 승점</b>을 받아 — 1등 10 · 2등 7 · 3등 5 · 4등 4 · 5등 3 · 6~10등 2 · 참여만 해도 1<br>승점을 다 더한 게 주간 순위야. 하루 크게 내는 것보다 <b>매일 오는 게</b> 유리해.',
     name_checking:  '확인 중…',
     name_free:      '쓸 수 있는 이름이야',
     name_used:      '다른 사람이 쓰고 있는 이름이야',
@@ -2269,6 +2271,16 @@ function 족보연출(result) {
   sfx.fanfare(급);
 }
 
+// 연출 미리보기: ?fx=1|2|3 으로 열면 그 급을 한 번 보여준다.
+// 스트레이트 플러시는 판당 한 번 볼까 말까라 이게 없으면 확인할 방법이 없다.
+// 게임 상태는 안 건드리고 화면 연출만 재생한다.
+function fx미리보기() {
+  const 급 = Number(new URLSearchParams(location.search).get('fx'));
+  if (!(급 >= 1 && 급 <= 3)) return;
+  const 종류 = ['fullHouse', 'fourKind', 'straightFlush'][급 - 1];
+  setTimeout(() => 족보연출({ type: 종류, name: L(HAND_TYPES[종류].name) }), 500);
+}
+
 // 이미 정해진 판정을 실행한다. 연출이 끝났을 때도, 새로고침 뒤 이어할 때도
 // 같은 함수를 쓴다 — 두 길이 갈리면 그 틈으로 빠져나갈 수 있다.
 function 판정따르기() {
@@ -2540,7 +2552,7 @@ function weeklyTable(entries) {
 
   return '<table class="board-table"><thead><tr>'
        + `<th></th><th></th><th>${t('col_pts')}</th>`
-       + `<th>${t('col_days')}</th><th>${t('col_score')}</th>`
+       + `<th>${t('col_days')}</th><th>${t('col_best')}</th>`
        + `</tr></thead><tbody>${행}</tbody></table>`
        + `<div class="board-help">${t('week_help')}</div>`;
 }
@@ -2935,6 +2947,7 @@ updateModeButtons();
 applyStaticText();
 newGame();
 showStart();
+fx미리보기();
 </script>
 
 <!-- 분석: GoatCounter. 쿠키를 안 쓰므로 동의 배너가 필요 없다.
