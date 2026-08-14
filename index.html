@@ -193,6 +193,73 @@
     min-height: 18px;
   }
   .projection.clear { color: #7bff9b; font-weight: 700; }
+  /* ── 연출 ──────────────────────────────────
+     규칙은 그대로 두고 반응만 늘린다. 카드를 내면 날아가고, 점수는
+     세어 올라가고, 연쇄가 쌓이면 화면이 흔들린다. 판단은 안 바뀌지만
+     "내가 뭔가 했다"는 느낌이 생긴다. */
+
+  /* 낸 카드가 위로 날아간다 */
+  .card.playing {
+    animation: cardFly .28s cubic-bezier(.4, 0, .8, .4) forwards;
+    pointer-events: none;
+  }
+  @keyframes cardFly {
+    0%   { transform: translateY(-16px) scale(1);    opacity: 1; }
+    40%  { transform: translateY(-38px) scale(1.06); opacity: 1; }
+    100% { transform: translateY(-120px) scale(.7);  opacity: 0; }
+  }
+
+  /* 버린 카드는 아래로 흘러내린다 — 낸 것과 구분되어야 한다 */
+  .card.tossing {
+    animation: cardToss .26s ease-in forwards;
+    pointer-events: none;
+  }
+  @keyframes cardToss {
+    0%   { transform: translateY(0) rotate(0);        opacity: 1; }
+    100% { transform: translateY(46px) rotate(10deg); opacity: 0; }
+  }
+
+  /* 연쇄가 오를 때 화면이 한 번 튄다. 세게 쌓을수록 크게. */
+  .shake-1 { animation: shake .22s ease; }
+  .shake-2 { animation: shake .3s ease; }
+  .shake-3 { animation: shake .38s ease; }
+  @keyframes shake {
+    0%, 100% { transform: translate(0, 0); }
+    20%  { transform: translate(-3px, 2px); }
+    40%  { transform: translate(3px, -2px); }
+    60%  { transform: translate(-2px, -1px); }
+    80%  { transform: translate(2px, 1px); }
+  }
+
+  /* 연쇄가 오른 순간 숫자 뒤에서 빛이 퍼진다 */
+  .combo.flare { animation: flare .5s ease; }
+  @keyframes flare {
+    0%   { text-shadow: 0 0 0 rgba(123,255,155,0); transform: scale(1); }
+    35%  { text-shadow: 0 0 26px rgba(123,255,155,.9); transform: scale(1.35); }
+    100% { text-shadow: 0 0 0 rgba(123,255,155,0); transform: scale(1); }
+  }
+
+  /* 칩·배수가 확정될 때 한 번씩 튄다 */
+  .chips.tick, .mult.tick { animation: tick .3s ease; }
+  @keyframes tick {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.28); }
+    100% { transform: scale(1); }
+  }
+
+  /* 목표를 넘긴 순간 진행바가 빛난다 */
+  .progress-fill.done {
+    background: linear-gradient(90deg, #7bff9b, #ffd75b);
+    box-shadow: 0 0 14px rgba(123,255,155,.6);
+  }
+
+  /* 어지러운 걸 싫어하는 사람도 있다. 기기 설정을 따른다. */
+  @media (prefers-reduced-motion: reduce) {
+    .card.playing, .card.tossing, .combo.flare,
+    .chips.tick, .mult.tick,
+    .shake-1, .shake-2, .shake-3 { animation: none !important; }
+  }
+
   @keyframes pop {
     0%   { transform: scale(.7); opacity: 0; }
     60%  { transform: scale(1.15); }
@@ -1838,9 +1905,21 @@ function play() {
   state.stageScore += result.score;
   state.totalScore += result.score;
 
-  removeSelected();
-  render();
-  showScorePop(result);
+  // 낸 카드가 먼저 날아가고, 그 다음에 점수가 뜬다.
+  // 사라지는 걸 보고 나서 결과가 나와야 "내가 낸 것"으로 읽힌다.
+  const 날아갈카드 = [...document.querySelectorAll('.card.selected')];
+  날아갈카드.forEach(c => c.classList.add('playing'));
+
+  const 오른칸 = state.combo - prevCombo;
+  setTimeout(() => {
+    removeSelected();
+    render();
+    showScorePop(result);
+    if (오른칸 > 0) {
+      튕기기($('combo'), 'flare');
+      흔들기(state.combo >= 8 ? 3 : state.combo >= 4 ? 2 : 1);
+    }
+  }, 날아갈카드.length ? 260 : 0);
 
   // 연출이 끝난 뒤 승패 판정
   setTimeout(() => {
@@ -1852,15 +1931,24 @@ function play() {
     } else {
       render();
     }
-  }, 900);
+  }, 1250);   // 카드가 날아가고(260) 점수가 다 올라갈(520) 때까지 기다린다
 }
 
 function discard() {
   if (state.locked || state.selected.size === 0 || state.discardsLeft <= 0) return;
   state.discardsLeft--;
   sfx.discard();
-  removeSelected();
-  render();
+
+  // 버린 카드는 아래로 흘러내린다. 낸 카드(위로 날아감)와 구분되어야
+  // 무엇을 했는지가 눈에 남는다.
+  const 버릴카드 = [...document.querySelectorAll('.card.selected')];
+  버릴카드.forEach(c => c.classList.add('tossing'));
+  state.locked = true;                 // 연출 중에는 입력을 막는다
+  setTimeout(() => {
+    state.locked = false;
+    removeSelected();
+    render();
+  }, 버릴카드.length ? 240 : 0);
 }
 
 
@@ -1889,6 +1977,7 @@ function render() {
   if (경고.length) 경고줄.textContent = 경고.join('  ·  ');
 
   $('progress').style.width   = Math.min(100, state.stageScore / target * 100) + '%';
+  $('progress').classList.toggle('done', state.stageScore >= target);
 
   // 손패
   // 첫 수 유도: 아직 아무것도 안 골랐을 때만 가리킨다. 하나라도 고르면 사라진다.
@@ -1953,7 +2042,7 @@ function setCombo(value, bump) {
   const el = $('combo');
   el.textContent = value;
   el.classList.toggle('idle', value <= 1);
-  el.classList.remove('bump');
+  el.classList.remove('bump', 'flare');
   if (bump && value > 1) {
     void el.offsetWidth;          // 애니메이션 재시작
     el.classList.add('bump');
@@ -2041,6 +2130,34 @@ function renderProjection(preview) {
 }
 
 // 점수가 터지는 연출
+// 화면을 한 번 튕긴다. 연쇄가 높을수록 세게.
+function 흔들기(세기) {
+  const el = $('app');
+  el.classList.remove('shake-1', 'shake-2', 'shake-3');
+  void el.offsetWidth;
+  el.classList.add('shake-' + Math.min(3, Math.max(1, 세기)));
+}
+
+// 숫자를 0에서부터 세어 올린다. 한 번에 찍히는 것보다 "벌었다"는 느낌이 크다.
+function 숫자올리기(el, 끝값, 시간 = 520) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || 끝값 <= 0) {
+    el.textContent = '+' + 끝값.toLocaleString();
+    return;
+  }
+  const 시작 = performance.now();
+  const 한걸음 = 지금 => {
+    const t = Math.min(1, (지금 - 시작) / 시간);
+    const 완만 = 1 - Math.pow(1 - t, 3);        // 끝으로 갈수록 천천히
+    el.textContent = '+' + Math.round(끝값 * 완만).toLocaleString();
+    if (t < 1) requestAnimationFrame(한걸음);
+  };
+  requestAnimationFrame(한걸음);
+}
+
+const 튕기기 = (el, 클래스) => {
+  el.classList.remove(클래스); void el.offsetWidth; el.classList.add(클래스);
+};
+
 function showScorePop(result) {
   $('hand-name').textContent = result.name;
   $('hand-name').classList.add('active');
@@ -2052,11 +2169,15 @@ function showScorePop(result) {
   $('projection').className = 'projection';
   $('projection').textContent = '';
 
+  튕기기($('chips'), 'tick');
+  튕기기($('mult'),  'tick');
+
   const el = $('result');
   el.className = 'result';          // 예상치(preview) 스타일을 확실히 걷어낸다
-  el.textContent = '+' + result.score.toLocaleString();
+  el.textContent = '+0';
   void el.offsetWidth;              // 애니메이션 재시작 트릭
   el.classList.add('pop');
+  숫자올리기(el, result.score);
 }
 
 
