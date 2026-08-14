@@ -176,6 +176,53 @@ export class Board {
 }
 
 // ══════════════════════════════════════════════
+//  밸런스 통계
+//  "몇 번 뽑혔나"만으로는 인기 증강인지 아무도 안 쓰는 증강인지 구분이 안 된다.
+//  뜬 횟수(offered)와 고른 횟수(picked)를 같이 세야 채택률이 나온다.
+//  결과는 비밀번호를 아는 사람만 볼 수 있다.
+// ══════════════════════════════════════════════
+
+const UPGRADE_IDS = new Set(['hands','discards','handsize','combocap','lowhands','flush',
+  'straight','trips','fullhouse','highcard','sflush','allchips','strip','nofaces','aces',
+  'equal','soft','floor','surge','glass','allin','narrow','fragile','bank','deepcut','wide']);
+
+export class Stats {
+  constructor(state, env) { this.state = state; this.env = env; }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const 통계 = (await this.state.storage.get('stats')) || { runs: 0, score: 0, stage: 0, up: {} };
+
+    if (url.pathname === '/read')  return json(통계);
+    if (url.pathname === '/reset') {
+      await this.state.storage.put('stats', { runs: 0, score: 0, stage: 0, up: {} });
+      return json({ ok: true });
+    }
+
+    const r = await request.json();
+    return await this.state.blockConcurrencyWhile(async () => {
+      통계.runs  += 1;
+      통계.score += r.score;
+      통계.stage += r.stage;
+      for (const 한번 of r.picks) {
+        for (const id of 한번.o) {
+          const u = 통계.up[id] || (통계.up[id] = { 뜸: 0, 골라짐: 0, 점수합: 0, 스테이지합: 0 });
+          u.뜸 += 1;
+        }
+        if (한번.p) {
+          const u = 통계.up[한번.p];
+          u.골라짐    += 1;
+          u.점수합     += r.score;
+          u.스테이지합 += r.stage;
+        }
+      }
+      await this.state.storage.put('stats', 통계);
+      return json({ ok: true });
+    });
+  }
+}
+
+// ══════════════════════════════════════════════
 //  입구 — 값 검사만 하고 순위표로 넘긴다
 // ══════════════════════════════════════════════
 
@@ -263,6 +310,61 @@ export default {
         // 확인 자체가 안 되면 막지는 않는다. 등록할 때 어차피 한 번 더 걸린다.
         return json({ ok: true, unknown: true });
       }
+    }
+
+    // ── 판 기록 (밸런스 측정용) ──
+    // 브라우저가 보내는 값이라 위조를 못 막는다. 대신 게임 규칙에 안 맞는 건
+    // 전부 거른다. 그리고 이건 아무도 못 보는 숫자라 흔들어봐야 얻는 게 없다.
+    if (request.method === 'POST' && url.pathname === '/run') {
+      let r;
+      try { r = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
+
+      const score = Math.floor(Number(r.score));
+      const stage = Math.floor(Number(r.stage));
+      const picks = Array.isArray(r.picks) ? r.picks : null;
+      if (!picks) return json({ error: 'bad picks' }, 400);
+
+      // 순위표와 같은 범위 검사
+      if (!Number.isFinite(score) || score < 0 || score > 100000000) return json({ error: 'bad' }, 400);
+      if (!Number.isFinite(stage) || stage < 1 || stage > 200)       return json({ error: 'bad' }, 400);
+      if (score < minScoreFor(stage) || score > maxScoreFor(stage))  return json({ error: 'bad' }, 400);
+
+      // 증강은 스테이지를 깰 때마다 하나씩이므로 개수가 정해져 있다.
+      // 이게 안 맞으면 손으로 만든 기록이다.
+      if (picks.length !== stage - 1) return json({ error: 'pick count' }, 400);
+
+      for (const p of picks) {
+        if (!p || !Array.isArray(p.o) || p.o.length < 1 || p.o.length > 3) return json({ error: 'bad offer' }, 400);
+        if (p.o.some(id => !UPGRADE_IDS.has(id)))       return json({ error: 'unknown id' }, 400);
+        if (new Set(p.o).size !== p.o.length)           return json({ error: 'dup offer' }, 400);
+        if (p.p !== null && !p.o.includes(p.p))         return json({ error: 'pick not offered' }, 400);
+      }
+
+      const id = env.STATS.idFromName('v1');
+      try {
+        await env.STATS.get(id).fetch('https://stats/write', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ score, stage, picks }),
+        });
+      } catch (e) { /* 통계는 없어도 게임은 돌아간다 */ }
+      return json({ ok: true });
+    }
+
+    // ── 통계 보기 (비밀번호 필요) ──
+    // 비밀번호는 클라우드플레어에만 있고 게임 코드에는 안 들어간다.
+    //   npx wrangler secret put STATS_KEY
+    if (url.pathname === '/stats' || url.pathname === '/stats/reset') {
+      // 비밀번호를 안 걸어놨으면 잠근 채로 둔다 (열어두지 않는다)
+      if (!env.STATS_KEY) return json({ error: 'not configured' }, 503);
+      // 해시끼리 비교한다. 한 글자씩 맞춰보는 데 걸리는 시간 차이로
+      // 정답을 알아내는 걸 막으려는 것이다.
+      const 준값 = request.headers.get('X-Stats-Key') || '';
+      if ((await ownerHash(준값)) !== (await ownerHash(env.STATS_KEY))) {
+        return json({ error: 'nope' }, 401);
+      }
+      const 길 = url.pathname === '/stats' ? 'read' : 'reset';
+      const res = await env.STATS.get(env.STATS.idFromName('v1')).fetch('https://stats/' + 길);
+      return json(await res.json(), res.status);
     }
 
     // ── 점수 등록 ──

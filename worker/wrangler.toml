@@ -25,9 +25,18 @@ id = "67d954a3361d46fcadeaa48a1c2572d9"
 name = "BOARD"
 class_name = "Board"
 
+# 밸런스 통계. 순위표와 섞지 않으려고 따로 뒀다.
+[[durable_objects.bindings]]
+name = "STATS"
+class_name = "Stats"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Board"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Stats"]
 
 # 순위표를 5분마다 깨워둔다. 식은 Durable Object의 첫 호출이 실패하는데,
 # 플레이어가 적어서 사람이 오는 시점엔 거의 항상 식어 있다.

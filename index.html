@@ -1067,6 +1067,7 @@ function loadDailyRun() {
   state = { ...raw,
     selected:     new Set(raw.selected),
     removedRanks: new Set(raw.removedRanks),
+    고른기록:     raw.고른기록 || [],   // 이 항목이 없던 시절의 저장본도 있다
     locked:       false };   // 점수 연출 도중에 저장됐을 수 있다
   rng.setState(raw.rngState);
   return true;
@@ -1434,6 +1435,9 @@ function newGame() {
     removedRanks: new Set(),   // 덱에서 빼버린 숫자
     addedRanks:   [],          // 덱에 더 넣은 숫자
     taken:        {},          // 업그레이드 id별 획득 횟수
+    // 밸런스 측정용. 어떤 3개가 떴고 그중 뭘 골랐는지를 스테이지별로 남긴다.
+    // '몇 번 뽑혔나'만으로는 인기 증강인지 아무도 안 쓰는 증강인지 구분이 안 된다.
+    고른기록:     [],
 
     // 연쇄 규칙 자체를 바꾸는 값들
     comboFloor:  1,            // 끊겼을 때 떨어지는 바닥
@@ -2022,6 +2026,10 @@ function renderUpgrades(list) {
   const box = $('ov-upgrades');
   box.innerHTML = '';
 
+  // 이번에 뜬 3개를 먼저 적어둔다. 고르면 아래에서 p가 채워진다.
+  const 이번 = { s: state.stage, o: list.map(u => u.id), p: null };
+  if (state.고른기록) state.고른기록.push(이번);
+
   for (const u of list) {
     const el = document.createElement('button');
     el.className = 'upgrade';
@@ -2031,6 +2039,7 @@ function renderUpgrades(list) {
       sfx.upgrade();
       u.apply(state);
       state.taken[u.id] = (state.taken[u.id] || 0) + 1;
+      이번.p = u.id;
       track('upgrade-' + u.id);
       $('overlay').classList.add('hidden');
       state.stage++;
@@ -2072,6 +2081,7 @@ function gameOver() {
   }
 
   sfx.over();
+  sendRunStats();
   track('gameover-stage-' + state.stage);
   track('maxcombo-' + state.maxCombo);
   track(playtimeBucket((Date.now() - state.startedAt) / 1000));
@@ -2138,6 +2148,27 @@ async function copyShare() {
 // ══════════════════════════════════════════════
 //  랭킹
 // ══════════════════════════════════════════════
+
+// 밸런스 측정용 기록을 판이 끝날 때 한 번 보낸다.
+// 이름은 보내지 않는다 — 누가 했는지가 아니라 무엇이 뽑히는지가 필요한 것이다.
+// 실패해도 조용히 넘어간다. 게임에 아무 영향이 없어야 한다.
+function sendRunStats() {
+  if (!BOARD_URL || !state || !state.고른기록) return;
+  try {
+    fetch(BOARD_URL + '/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,                 // 판 끝나고 바로 창을 닫아도 나간다
+      body: JSON.stringify({
+        score: state.totalScore,
+        stage: state.stage,
+        combo: state.maxCombo,
+        daily: DAILY_MODE ? 1 : 0,
+        picks: state.고른기록,
+      }),
+    }).catch(() => {});
+  } catch (e) { /* 통계는 없어도 된다 */ }
+}
 
 const playerName = () => localStorage.getItem('name') || '';
 let boardResult = null;     // 지금 등록하려는 결과
