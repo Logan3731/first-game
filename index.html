@@ -122,6 +122,21 @@
   .warn.soft { color: #8b91a3; background: #1a1d24; font-weight: 400; }
 
   /* 증강 고를 때 보여주는 현재 수치 */
+  /* 데일리 전용 다시 뽑기. 남은 횟수를 같이 보여줘야 아낄지 판단이 된다. */
+  .reroll {
+    background: transparent;
+    border: 1px solid #2f3542;
+    border-radius: 999px;
+    color: #b6bcca;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 18px;
+    cursor: pointer;
+  }
+  .reroll:hover:not(:disabled) { background: #1e222b; border-color: #444d61; }
+  .reroll:disabled { opacity: .4; cursor: not-allowed; }
+
   .ov-stats {
     margin: 2px 0 14px;
     text-align: center;
@@ -373,7 +388,10 @@
     max-width: 430px;
     text-align: left;
   }
-  .board-head { font-size: 12px; color: #8b91a3; margin-bottom: 8px; }
+  .board-head {
+    font-size: 12px; color: #8b91a3; margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
 
   /* 머리글과 값이 한 표 안에 있어야 열 너비가 같아진다.
      따로 두면 마지막 열이 '점수'와 '582,415' 기준으로 각자 계산돼 어긋난다 */
@@ -416,6 +434,16 @@
 
   /* 메시지 한 줄 (불러오는 중 / 없음 / 오류) */
   .board-msg { padding: 6px 7px; color: #8b91a3; font-size: 13px; }
+
+  /* 오늘 / 이번 주 */
+  .board-tabs { display: flex; gap: 4px; }
+  .board-tab {
+    background: transparent; border: none; cursor: pointer;
+    color: #6f7688; font-family: inherit; font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .board-tab.on { background: #2a2f3c; color: #e8eaf0; }
+  .board-help { margin-top: 9px; font-size: 11px; color: #565c6e; line-height: 1.5; }
 
   .board-name { display: flex; gap: 6px; margin-top: 10px; }
   .name-check { margin-top: 7px; font-size: 12.5px; min-height: 16px; color: #6f7688; }
@@ -673,6 +701,7 @@
   <!-- 증강은 손패·핸드·버리기를 바꾸는 게 많아서 지금 값을 알아야 고를 수 있다 -->
   <div class="ov-stats hidden" id="ov-stats"></div>
   <div class="upgrades hidden" id="ov-upgrades"></div>
+  <button class="reroll hidden" id="ov-reroll"></button>
   <div class="ov-actions">
     <button class="btn-play" id="ov-btn"></button>
     <button class="btn-discard hidden" id="ov-share-btn" data-i18n="copy_result">Copy Result</button>
@@ -867,6 +896,15 @@ const I18N = {
     board_error:    'Ranking unavailable',
     board_empty:    'No scores yet — be the first',
     board_taken:    'That name is already on the board — pick another',
+    reroll:         n => `Reroll (${n} left)`,
+    reroll_none:    'No rerolls left',
+    tab_today:      'Today',
+    tab_week:       'This week',
+    col_pts:        'PTS',
+    col_days:       'DAYS',
+    board_weekly:   'This week',
+    board_locked:   "Today's run is already recorded — a new one tomorrow",
+    week_help:      'Daily placing becomes points. 1st 10 · 2nd 7 · 3rd 5 · 4th 4 · 5th 3 · 6-10th 2 · rest 1',
     name_checking:  'Checking…',
     name_free:      'This name is available',
     name_used:      'Someone else is using this name',
@@ -951,6 +989,15 @@ const I18N = {
     board_error:    '순위를 못 불러왔어',
     board_empty:    '아직 아무도 없어 — 1등 해봐',
     board_taken:    '그 이름은 이미 순위표에 있어 — 다른 이름으로 해줘',
+    reroll:         n => `다시 뽑기 (${n}회 남음)`,
+    reroll_none:    '다시 뽑기를 다 썼어',
+    tab_today:      '오늘',
+    tab_week:       '이번 주',
+    col_pts:        '점수',
+    col_days:       '참여',
+    board_weekly:   '이번 주',
+    board_locked:   '오늘 기록은 이미 등록됐어 — 내일 새 문제가 나와',
+    week_help:      '그날 등수가 점수가 돼. 1등 10 · 2등 7 · 3등 5 · 4등 4 · 5등 3 · 6~10등 2 · 나머지 1',
     name_checking:  '확인 중…',
     name_free:      '쓸 수 있는 이름이야',
     name_used:      '다른 사람이 쓰고 있는 이름이야',
@@ -1006,6 +1053,9 @@ const BOARD_URL = EXTERNAL_OK ? 'https://chain-leaderboard.xheuri123.workers.dev
 // 같은 날이면 누구나 같은 덱과 같은 업그레이드 순서를 받는다.
 // 그래야 공유한 점수가 비교가 되고, 비교가 돼야 받은 사람이 해본다.
 const DAILY_EPOCH = new Date(2026, 7, 10).setHours(0, 0, 0, 0);   // 2026-08-10 = #1
+
+// 데일리 #1이 월요일이라 7일 묶음이 월~일 주와 그대로 맞는다
+const weekNumber = () => Math.floor((todayNumber() - 1) / 7) + 1;
 
 function todayNumber() {
   const 오늘 = new Date().setHours(0, 0, 0, 0);
@@ -1068,6 +1118,7 @@ function loadDailyRun() {
     selected:     new Set(raw.selected),
     removedRanks: new Set(raw.removedRanks),
     고른기록:     raw.고른기록 || [],   // 이 항목이 없던 시절의 저장본도 있다
+    rerolls:      raw.rerolls == null ? (DAILY_MODE ? 2 : 0) : raw.rerolls,
     locked:       false };   // 점수 연출 도중에 저장됐을 수 있다
   rng.setState(raw.rngState);
   return true;
@@ -1438,6 +1489,10 @@ function newGame() {
     // 밸런스 측정용. 어떤 3개가 떴고 그중 뭘 골랐는지를 스테이지별로 남긴다.
     // '몇 번 뽑혔나'만으로는 인기 증강인지 아무도 안 쓰는 증강인지 구분이 안 된다.
     고른기록:     [],
+    // 데일리는 하루 한 판이라 나쁜 패를 받으면 그날이 끝난다. 그래서 데일리에만 준다.
+    // 매 스테이지 주면 안 쓸 이유가 없어 그냥 버튼이 되고, 한 판에 보는 증강이
+    // 73% → 93%로 뛴다(무제한이 98%). 판당 2회면 78%라 지금과 거의 같다.
+    rerolls:      DAILY_MODE ? 2 : 0,
 
     // 연쇄 규칙 자체를 바꾸는 값들
     comboFloor:  1,            // 끊겼을 때 떨어지는 바닥
@@ -2022,11 +2077,23 @@ function pickUpgrades(n) {
   return shuffle([...pool]).slice(0, n);
 }
 
+function 다시뽑기버튼() {
+  const b = $('ov-reroll');
+  const 남음 = state.rerolls || 0;
+  b.textContent = 남음 > 0 ? t('reroll', 남음) : t('reroll_none');
+  b.disabled = 남음 <= 0;
+}
+
+// 마지막으로 띄운 증강 화면. 다시 뽑기가 이 자리를 갈아끼운다.
+let 이번증강 = null;
+
 function renderUpgrades(list) {
+  이번증강 = list;
   const box = $('ov-upgrades');
   box.innerHTML = '';
 
   // 이번에 뜬 3개를 먼저 적어둔다. 고르면 아래에서 p가 채워진다.
+  // 다시 뽑아서 버린 3개도 '뜬 것'으로 남긴다 — 무엇이 버려지는지가 곧 데이터다.
   const 이번 = { s: state.stage, o: list.map(u => u.id), p: null };
   if (state.고른기록) state.고른기록.push(이번);
 
@@ -2201,6 +2268,41 @@ function boardMessage(msg) {
 // 순위표에 몇 줄까지 보여줄지. 이보다 아래면 내 줄만 따로 붙는다.
 const TOP_SHOWN = 10;
 
+// 데일리일 때만 오늘/이번 주를 오갈 수 있다. 자유 모드엔 주간이 없다.
+let WEEK_VIEW = false;
+
+const boardQuery = () =>
+    !DAILY_MODE            ? '?mode=free'
+  : WEEK_VIEW              ? `?mode=weekly&week=${weekNumber()}`
+  :                          `?mode=daily&day=${todayNumber()}`;
+
+function boardTabs() {
+  if (!DAILY_MODE) return '';
+  const 탭 = (키, 주간) =>
+    `<button class="board-tab${WEEK_VIEW === 주간 ? ' on' : ''}" data-week="${주간 ? 1 : 0}">${t(키)}</button>`;
+  return `<div class="board-tabs">${탭('tab_today', false)}${탭('tab_week', true)}</div>`;
+}
+
+// 주간은 점수·참여일이 핵심이라 칸이 다르다
+function weeklyTable(entries) {
+  if (!entries || !entries.length) return boardMsg(t('board_empty'));
+  const 나 = playerName();
+  const 행 = entries.slice(0, TOP_SHOWN).map((e, i) =>
+    `<tr class="${나 && e.name === 나 ? 'me' : ''}">`
+    + `<td class="board-rank">${i + 1}</td>`
+    + `<td class="board-name-cell">${escapeHtml(e.name)}</td>`
+    + `<td class="board-chain">${Number(e.pts) || 0}</td>`
+    + `<td>${Number(e.days) || 0}</td>`
+    + `<td>${Number(e.best).toLocaleString()}</td>`
+    + '</tr>').join('');
+
+  return '<table class="board-table"><thead><tr>'
+       + `<th></th><th></th><th>${t('col_pts')}</th>`
+       + `<th>${t('col_days')}</th><th>${t('col_score')}</th>`
+       + `</tr></thead><tbody>${행}</tbody></table>`
+       + `<div class="board-help">${t('week_help')}</div>`;
+}
+
 // 순위표를 표로 그린다. 오버레이와 게임 중 패널이 같은 함수를 쓴다.
 function boardTable(entries) {
   if (!entries || !entries.length) return boardMsg(t('board_empty'));
@@ -2234,9 +2336,29 @@ function boardTable(entries) {
        + `</tr></thead><tbody>${행}</tbody></table>`;
 }
 
+// 지금 보고 있는 것에 맞는 표를 고른다
+const 표그리기 = entries => (DAILY_MODE && WEEK_VIEW) ? weeklyTable(entries) : boardTable(entries);
+
 function renderBoard(entries) {
-  $('board-head').textContent = DAILY_MODE ? t('board_daily') : t('board_free');
-  $('board-list').innerHTML = boardTable(entries);
+  $('board-head').innerHTML =
+      `<span>${DAILY_MODE ? (WEEK_VIEW ? t('board_weekly') : t('board_daily')) : t('board_free')}</span>`
+    + boardTabs();
+  $('board-list').innerHTML = 표그리기(entries);
+}
+
+// 탭은 두 군데(오버레이·게임 중 패널)에 있어서 한 곳에서 처리한다
+document.addEventListener('click', e => {
+  const 탭 = e.target.closest('.board-tab');
+  if (!탭) return;
+  WEEK_VIEW = 탭.dataset.week === '1';
+  if (!$('ov-board').classList.contains('hidden')) 순위다시();
+  if ($('rank').open) loadRankPanel();
+});
+
+async function 순위다시() {
+  boardMessage(t('board_loading'));
+  try { renderBoard((await fetchBoard(boardQuery())).entries); }
+  catch (e) { boardMessage(t('board_error')); }
 }
 
 // 순위표는 식어 있으면 첫 호출이 실패한다. 서버도 재시도하지만
@@ -2263,9 +2385,8 @@ async function loadRankPanel() {
   if (!BOARD_URL) return;
   box.innerHTML = boardMsg(t('board_loading'));
   try {
-    const q = DAILY_MODE ? `?mode=daily&day=${todayNumber()}` : '?mode=free';
-    const data = await fetchBoard(q);
-    box.innerHTML = boardTable(data.entries);
+    const data = await fetchBoard(boardQuery());
+    box.innerHTML = boardTabs() + 표그리기(data.entries);
   } catch (e) {
     box.innerHTML = boardMsg(t('board_error'));
   }
@@ -2299,6 +2420,8 @@ async function submitScore(r) {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     renderBoard(data.entries);
+    // 서버가 오늘은 이미 끝났다고 하면 알려준다 (브라우저 기록을 지우고 다시 한 경우)
+    if (data.already) boardMessage(t('board_locked'));
     track('board-submit');
   } catch (e) {
     // 남이 먼저 쓴 이름이면 왜 안 되는지 알려줘야 한다
@@ -2311,7 +2434,9 @@ function showBoard(r) {
   if (!BOARD_URL) return;
   boardResult = r;
   $('ov-board').classList.remove('hidden');
-  $('board-head').textContent = DAILY_MODE ? t('board_daily') : t('board_free');
+  WEEK_VIEW = false;                      // 판이 끝나면 오늘 순위부터 보여준다
+  $('board-head').innerHTML =
+      `<span>${DAILY_MODE ? t('board_daily') : t('board_free')}</span>` + boardTabs();
 
   if (playerName()) {
     $('board-name').classList.add('hidden');
@@ -2334,6 +2459,9 @@ function showOverlay(title, score, desc, btnText, onClick, share, upgrades, shar
   // 업그레이드를 고르는 화면에서는 버튼 대신 카드가 선택지가 된다
   $('ov-upgrades').classList.toggle('hidden', !upgrades);
   $('ov-stats').classList.toggle('hidden', !upgrades);
+  // 다시 뽑기는 데일리에서만, 그리고 증강 고르는 화면에서만
+  $('ov-reroll').classList.toggle('hidden', !(upgrades && DAILY_MODE));
+  if (upgrades && DAILY_MODE) 다시뽑기버튼();
   $('ov-btn').classList.toggle('hidden', !!upgrades);
   if (upgrades) {
     // 고를 증강이 이 값들을 건드리므로 지금 값을 같이 보여준다
@@ -2393,6 +2521,21 @@ function setLang(lang) {
   if (!$('start').classList.contains('hidden')) showStart();   // 시작 화면 문구도
   if (!$('manual-ov').classList.contains('hidden')) renderManual();   // 설명서를 열어둔 채 바꿔도
 }
+
+$('ov-reroll').onclick = () => {
+  if (!state || (state.rerolls || 0) <= 0) return;
+  state.rerolls--;
+  sfx.upgrade();
+  // 이미 뜬 것들은 후보에서 빼서 같은 3개가 또 나오지 않게 한다
+  const 방금 = new Set((이번증강 || []).map(u => u.id));
+  let 새것 = pickUpgrades(99).filter(u => !방금.has(u.id));
+  새것 = shuffle(새것).slice(0, 3);
+  if (!새것.length) 새것 = pickUpgrades(3);      // 남은 게 없으면 그냥 다시
+  renderUpgrades(새것);
+  다시뽑기버튼();
+  saveDailyRun();
+  track('reroll-stage-' + state.stage);
+};
 
 $('manual-btn').onclick   = openManual;
 $('start-manual').onclick = openManual;

@@ -150,6 +150,14 @@ export class Board {
       const 기존 = list.find(e => e.name === body.name);
       if (기존 && 기존.own && 기존.own !== body.own) return [409, { error: 'name taken' }];
 
+      // 데일리는 하루 한 판. 첫 기록이 그날의 기록으로 굳는다.
+      // 브라우저 기록을 지우고 다시 하는 걸 여기서 막는다. 클라이언트의
+      // "오늘 끝났음" 표시는 지우면 그만이라 서버가 판단해야 한다.
+      // 실패해서 다시 보낸 경우와 구분이 안 되므로 오류 대신 현재 순위를 돌려준다.
+      if (daily && 기존) {
+        return [200, { entries: publicList(list), rank: list.indexOf(기존) + 1 || null, already: true }];
+      }
+
       const entry = {
         name: body.name, score: body.score, stage: body.stage,
         combo: body.combo, own: body.own, at: Date.now(),
@@ -173,6 +181,44 @@ export class Board {
 
     return json(out[1], out[0]);
   }
+}
+
+// ══════════════════════════════════════════════
+//  주간 순위
+//  점수를 그냥 더하면 하루 크게 낸 사람이 그 주를 통째로 가져간다.
+//  그래서 날마다 등수를 점수로 바꿔서 더한다. 100만 점이든 10만 점이든
+//  그날 1등이면 같은 10점이다. 꾸준히 온 사람이 위로 간다.
+// ══════════════════════════════════════════════
+
+const 등수점수 = 순위 => (순위 === 1 ? 10 : 순위 === 2 ? 7 : 순위 === 3 ? 5
+                       : 순위 === 4 ? 4 : 순위 === 5 ? 3 : 순위 <= 10 ? 2 : 1);
+
+const weekOf = day => Math.floor((day - 1) / 7) + 1;
+
+async function weeklyBoard(env, week) {
+  const 첫날 = (week - 1) * 7 + 1;
+  const 사람 = new Map();   // 이름 → { 점수, 참여일, 최고점, 총점 }
+
+  for (let d = 첫날; d < 첫날 + 7; d++) {
+    // KV 사본을 읽는다. 점수를 올릴 때마다 갱신되고, 저장소보다 잘 안 죽는다.
+    let 목록;
+    try { 목록 = JSON.parse((await env.SCORES.get(`board:daily:${d}`)) || '[]'); }
+    catch (e) { 목록 = []; }
+    목록 = 목록.filter(e => e && typeof e.name === 'string' && Number.isFinite(e.score))
+               .sort((a, b) => b.score - a.score);
+
+    목록.forEach((e, i) => {
+      const r = 사람.get(e.name) || { name: e.name, pts: 0, days: 0, best: 0, sum: 0 };
+      r.pts  += 등수점수(i + 1);
+      r.days += 1;
+      r.best  = Math.max(r.best, e.score);
+      r.sum  += e.score;
+      사람.set(e.name, r);
+    });
+  }
+
+  // 점수가 같으면 총점이 높은 쪽이 위
+  return [...사람.values()].sort((a, b) => b.pts - a.pts || b.sum - a.sum).slice(0, TOP_N);
 }
 
 // ══════════════════════════════════════════════
@@ -275,6 +321,12 @@ export default {
 
     // ── 순위 조회 ──
     if (request.method === 'GET' && url.pathname === '/top') {
+      if (url.searchParams.get('mode') === 'weekly') {
+        const week = Number(url.searchParams.get('week')) || 1;
+        if (week < 1 || week > 10000) return json({ error: 'bad week' }, 400);
+        return json({ entries: await weeklyBoard(env, week), week });
+      }
+
       const mode = url.searchParams.get('mode') === 'daily' ? 'daily' : 'free';
       const day  = Number(url.searchParams.get('day')) || 0;
       const key = boardKey(mode, day);
