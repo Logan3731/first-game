@@ -368,24 +368,6 @@
     .fx-name.n3 { font-size: 39px; }
   }
 
-  /* 화면이 짧은 폰에서는 더 조인다. 스테이지부터 플레이 버튼까지가
-     한 화면에 안 들어오면 게임을 할 수가 없다. 큰 폰까지 같이
-     쪼그라들 필요는 없어서 짧을 때만 적용한다. */
-  @media (max-height: 700px) {
-    body { padding-top: 10px; }
-    .hud { padding: 9px 12px 10px; margin-bottom: 10px; }
-    .hud-main { margin: 4px 0 7px; }
-    .hud-main .score { font-size: 26px; }
-    .hud-sub { display: none; }        /* 누적 점수는 판이 끝나면 본다 */
-    .stage-area { padding: 10px 12px 11px; margin-bottom: 10px; gap: 4px; }
-    .hand-name { font-size: 14px; }
-    .sort-bar { margin-bottom: 10px; }
-    .hand { margin-bottom: 10px; }
-    .card { height: 70px; }
-    .result { font-size: 26px; }
-    .actions button { padding: 11px 22px; }
-  }
-
   /* 어지러운 걸 싫어하는 사람도 있다. 기기 설정을 따른다. */
   @media (prefers-reduced-motion: reduce) {
     .card.playing, .card.tossing, .combo.flare,
@@ -469,6 +451,21 @@
     .card-suit { font-size: 17px; }
     .hand { gap: 6px; }
   }
+
+  /* 버튼 안의 남은 횟수. 누르면 하나 줄어드는 게 보여야 한다. */
+  .actions button { display: inline-flex; align-items: center; gap: 8px; }
+  .cnt {
+    min-width: 22px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, .28);
+    font-size: 14px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  /* 마지막 하나가 남으면 눈에 걸리게 */
+  .cnt.low { background: #ffd75b; color: #2a2413; }
+  button:disabled .cnt.low { background: rgba(0,0,0,.28); color: inherit; }
 
   /* ── 버튼 ──────────────────────────────── */
   .actions { display: flex; gap: 10px; justify-content: center; }
@@ -767,6 +764,40 @@
   }
   .manual-ex .hi { color: #5bc8ff; font-weight: 700; }
 
+  /* 화면이 짧은 폰에서는 더 조인다. 스테이지부터 플레이 버튼까지가
+     한 화면에 안 들어오면 게임을 할 수가 없다. 큰 폰까지 같이
+     쪼그라들 필요는 없어서 짧을 때만 적용한다. */
+  @media (max-height: 700px) {
+    body { padding-top: 10px; }
+    .hud { padding: 9px 12px 10px; margin-bottom: 10px; }
+    .hud-main { margin: 4px 0 7px; }
+    .hud-main .score { font-size: 26px; }
+    .hud-sub { display: none; }        /* 누적 점수는 판이 끝나면 본다 */
+    .stage-area { padding: 10px 12px 11px; margin-bottom: 10px; gap: 4px; }
+    .hand-name { font-size: 14px; }
+    .sort-bar { margin-bottom: 8px; }
+    .hand { margin-bottom: 10px; }
+    .card { height: 68px; }
+    .hand.dense .card { height: 58px; }
+    .lang-bar { margin-bottom: 8px; }
+    .sort-bar button { padding: 5px 12px; }
+    .result { font-size: 26px; }
+    .actions button { padding: 11px 22px; }
+  }
+
+  /* 아주 짧은 화면 — 구형 안드로이드에 주소창까지 뜨면 여기까지 온다 */
+  @media (max-height: 620px) {
+    .card { height: 62px; }
+    .hand.dense .card { height: 54px; }
+    .card-rank { font-size: 18px; }
+    .card-suit { font-size: 14px; }
+    .stage-area { padding: 8px 12px 9px; margin-bottom: 8px; }
+    .hand { margin-bottom: 8px; }
+    .ladder { height: 28px; }
+    .result { font-size: 23px; }
+    .formula { font-size: 26px; }
+  }
+
   /* .overlay 규칙보다 뒤에 와야 오버레이에도 제대로 먹는다 */
   .hidden { display: none; }
 </style>
@@ -794,7 +825,6 @@
   <div class="hud">
     <div class="hud-top">
       <span class="hud-stage"><span data-i18n="hud_stage">Stage</span> <b id="hud-stage">1</b></span>
-      <span class="hud-res" id="hud-left">4 / 3</span>
     </div>
     <div class="hud-main">
       <span class="score" id="hud-score">0</span>
@@ -835,9 +865,15 @@
 
   <div class="hand" id="hand"></div>
 
+  <!-- 남은 횟수는 그걸 쓰는 버튼에 붙인다. HUD 구석의 작은 글씨로는
+       판의 목숨이 몇 개 남았는지가 눈에 안 들어온다. -->
   <div class="actions">
-    <button class="btn-play" id="btn-play" data-i18n="btn_play" disabled>Play</button>
-    <button class="btn-discard" id="btn-discard" data-i18n="btn_discard" disabled>Discard</button>
+    <button class="btn-play" id="btn-play" disabled>
+      <span data-i18n="btn_play">Play</span><b class="cnt" id="cnt-play">4</b>
+    </button>
+    <button class="btn-discard" id="btn-discard" disabled>
+      <span data-i18n="btn_discard">Discard</span><b class="cnt" id="cnt-discard">3</b>
+    </button>
   </div>
 
   <details class="guide hidden" id="owned">
@@ -1055,7 +1091,6 @@ const I18N = {
   en: {
     title:      'Chain — Card Roguelite',
     hud_stage:  'Stage',
-    hud_left:   (h, d) => `${h} hands · ${d} discards`,
     hud_total:  v => `run ${v}`,
 
     pick_cards:  'Pick your cards (up to 5)',
@@ -1145,7 +1180,6 @@ const I18N = {
   ko: {
     title:      '연쇄 — 카드 로그라이트',
     hud_stage:  '스테이지',
-    hud_left:   (h, d) => `핸드 ${h} · 버리기 ${d}`,
     hud_total:  v => `누적 ${v}`,
 
     pick_cards:  '카드를 골라봐 (최대 5장)',
@@ -2142,7 +2176,11 @@ function render() {
   $('hud-target').textContent = target.toLocaleString();
   $('hud-score').textContent  = state.stageScore.toLocaleString();
   $('hud-total').textContent  = t('hud_total', state.totalScore.toLocaleString());
-  $('hud-left').textContent   = t('hud_left', state.handsLeft, state.discardsLeft);
+  $('cnt-play').textContent    = state.handsLeft;
+  $('cnt-discard').textContent = state.discardsLeft;
+  // 마지막 하나가 남으면 색이 바뀐다. 숫자만으로는 늦게 알아챈다.
+  $('cnt-play').classList.toggle('low', state.handsLeft <= 1);
+  $('cnt-discard').classList.toggle('low', state.discardsLeft <= 1);
 
   // 남은 게 하나뿐이면 알려준다. 숫자(1 / 2)만 보고는 잘 안 알아챈다.
   const 경고 = [];
