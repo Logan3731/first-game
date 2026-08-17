@@ -572,7 +572,7 @@
   }
   .overlay.hidden { display: none; }
   .overlay h2 { font-size: 30px; }
-  .overlay p { color: #8b91a3; font-size: 15px; line-height: 1.6; }
+  .overlay p { color: #8b91a3; font-size: 15px; line-height: 1.6; white-space: pre-line; }
 
   /* 복사될 내용을 그대로 보여준다. 뭐가 붙여넣어질지 알아야 누른다 */
   .share-preview {
@@ -824,7 +824,7 @@
        스테이지는 맥락, 핸드·버리기는 자원이라 옆으로 뺐다. -->
   <div class="hud">
     <div class="hud-top">
-      <span class="hud-stage"><span data-i18n="hud_stage">Stage</span> <b id="hud-stage">1</b></span>
+      <span class="hud-stage" id="hud-stage">1층 · 현관</span>
     </div>
     <div class="hud-main">
       <span class="score" id="hud-score">0</span>
@@ -1125,6 +1125,9 @@ const I18N = {
     owned_count:  n => `Your upgrades · <span class="owned-count">${n}</span>`,
 
     stage_clear: n => `Stage ${n} Clear`,
+    floor_label:   (n, name) => `Floor ${n} · ${name}`,
+    floor_reached: (n, name) => `Floor ${n} — ${name}`,
+    stopped_at:    (n, name) => `You stopped on floor ${n}. ${name}.`,
     pick_one:    target => `Next target ${target} · pick one`,
     game_over:   'Game Over',
     new_best:    prev => `New best! (was ${prev})`,
@@ -1214,6 +1217,9 @@ const I18N = {
     owned_count:  n => `보유 능력 · <span class="owned-count">${n}개</span>`,
 
     stage_clear: n => `스테이지 ${n} 클리어`,
+    floor_label:   (n, name) => `${n}층 · ${name}`,
+    floor_reached: (n, name) => `${n}층 — ${name}`,
+    stopped_at:    (n, name) => `${n}층에서 멈췄다. ${name}.`,
     pick_one:    target => `다음 목표 ${target}점 · 하나 골라`,
     game_over:   '게임 오버',
     new_best:    prev => `최고 기록 경신! (이전 ${prev}점)`,
@@ -1700,6 +1706,56 @@ function openManual() {
 const closeManual = () => $('manual-ov').classList.add('hidden');
 
 // ══════════════════════════════════════════════
+//  층
+//  규칙이 이미 이야기 모양이다 — 직전보다 높아야 하고, 미끄러지면 바닥이고,
+//  내려갈 수는 없다. 그래서 스테이지를 '층'으로 바꾸고 층마다 사람을 세웠다.
+//  한 층에 한 줄만 준다. 점수 놀이를 하러 온 사람은 문단을 안 읽는다.
+//
+//  톤을 갈아엎고 싶으면 이 표만 고치면 된다. 게임 규칙과는 아무 연결도 없다.
+// ══════════════════════════════════════════════
+
+const FLOORS = [
+  { ko: ['현관',   '이름은 안 물을게. 올라갈 거면 값을 두고 가.'],
+    en: ['Entrance', "I won't ask your name. Going up costs."] },
+  { ko: ['세탁실', '여기서 다들 옷을 갈아입고 가더라.'],
+    en: ['Laundry',  'Everyone changes clothes here first.'] },
+  { ko: ['당구장', '한 판만 치고 가. 물론 걸고.'],
+    en: ['Pool hall', 'One game before you go. With stakes, obviously.'] },
+  { ko: ['복도',   '위층 사람들은 안 내려와요. 아저씨도 그럴 거예요?'],
+    en: ['Corridor', "People upstairs never come down. Will you?"] },
+  { ko: ['전당포', '맡길 게 있으면 지금이야. 위엔 맡길 데가 없어.'],
+    en: ['Pawnshop', 'Leave it here if you must. Nothing above takes deposits.'] },
+  { ko: ['라디오실', '지금 올라가는 사람 얘기가 나오고 있어. 네 얘기야.'],
+    en: ['Radio room', "They're talking about someone climbing. It's you."] },
+  { ko: ['계단참', '나도 여기까진 왔어.'],
+    en: ['Landing',  'I got this far too.'] },
+  { ko: ['응접실', '윗분은 아직 네 이름을 모르셔.'],
+    en: ['Parlour',  'The one above still does not know your name.'] },
+  { ko: ['금고',   '여기서부터는 숫자만 봐.'],
+    en: ['Vault',    'From here we only look at numbers.'] },
+  { ko: ['온실',   '위로만 자란 건 아래를 못 봐.'],
+    en: ['Greenhouse', 'What grows only upward cannot see below.'] },
+  { ko: ['발코니', '떨어지는 걸 여기서 봤어. 세 번.'],
+    en: ['Balcony',  "I've watched people fall from here. Three times."] },
+  { ko: ['옥탑방', '문은 하나뿐이고, 두 번 두드릴 수 없어.'],
+    en: ['Attic',    'One door, and you cannot knock twice.'] },
+  { ko: ['옥상',   '여기엔 아무도 없다.'],
+    en: ['Roof',     'There is no one here.'] },
+  { ko: ['그 위',  '층이 더 있을 리가 없는데.'],
+    en: ['Above',    'There should not be another floor.'] },
+];
+
+// 표를 넘어가면 이름만 이어 붙인다. 여기까지 오는 사람은 드물다.
+function floorOf(n) {
+  const f = FLOORS[n - 1];
+  if (f) return { name: L({ ko: f.ko[0], en: f.en[0] }), line: L({ ko: f.ko[1], en: f.en[1] }) };
+  // 표를 넘어섰다 = 이름이 붙어 있는 데까지 다 지나왔다는 뜻이다
+  return { name: L({ ko: '이름 없는 층', en: 'Unnamed floor' }),
+           line: L({ ko: '여기부터는 아무도 이름을 붙이지 않았다.',
+                     en: 'No one bothered to name anything past here.' }) };
+}
+
+// ══════════════════════════════════════════════
 //  게임 상태
 // ══════════════════════════════════════════════
 
@@ -2172,7 +2228,7 @@ const $ = id => document.getElementById(id);
 function render() {
   const target = targetFor(state.stage);
 
-  $('hud-stage').textContent  = state.stage;
+  $('hud-stage').textContent  = t('floor_label', state.stage, floorOf(state.stage).name);
   $('hud-target').textContent = target.toLocaleString();
   $('hud-score').textContent  = state.stageScore.toLocaleString();
   $('hud-total').textContent  = t('hud_total', state.totalScore.toLocaleString());
@@ -2535,10 +2591,12 @@ function stageClear() {
 
   track('stage-clear-' + state.stage);
   sfx.clear();
+  // 다음 층에 올라섰다. 그 층 사람이 한마디 한다.
+  const 다음 = floorOf(state.stage + 1);
   showOverlay(
-    t('stage_clear', state.stage),
+    t('floor_reached', state.stage + 1, 다음.name),
     state.stageScore.toLocaleString(),
-    t('pick_one', targetFor(state.stage + 1).toLocaleString()),
+    다음.line + '\n' + t('pick_one', targetFor(state.stage + 1).toLocaleString()),
     null, null, false,
     pickUpgrades(3)
   );
@@ -2565,12 +2623,14 @@ function gameOver() {
   track('maxcombo-' + state.maxCombo);
   track(playtimeBucket((Date.now() - state.startedAt) / 1000));
 
+  // 몇 층에서 멈췄는지. 숫자보다 자리가 기억에 남는다.
+  const 멈춘층 = t('stopped_at', state.stage, floorOf(state.stage).name);
   showOverlay(
     t('game_over'),
     state.totalScore.toLocaleString(),
-    isNewBest
+    멈춘층 + '\n' + (isNewBest
       ? t('new_best', best.toLocaleString())
-      : t('ended_at', state.stage, best.toLocaleString()),
+      : t('ended_at', state.stage, best.toLocaleString())),
     // 데일리는 다시 못 하니 자유 모드로 안내한다
     DAILY_MODE ? t('to_free') : t('play_again'),
     DAILY_MODE ? () => setMode(false) : newGame,
